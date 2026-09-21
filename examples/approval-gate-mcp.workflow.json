@@ -1,0 +1,253 @@
+{
+  "name": "Approval gate before an agent's tool call (TypeSafe over MCP)",
+  "nodes": [
+    {
+      "id": "s1",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "s2",
+      "name": "Proposed tool calls",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const context = 'The user asked the agent to tidy up the project folder and report what it found.';\nreturn [\n  { json: { context, action: { tool: 'read_file', arguments: { path: './README.md' } } } },\n  { json: { context, action: { tool: 'run_sql', arguments: { database: 'production', sql: 'DROP DATABASE customers;' } } } },\n  { json: { context, action: { tool: 'move_file', arguments: { from: './notes.txt', to: './archive/notes.txt' } } } },\n  { json: { context, action: { tool: 'send_email', arguments: { to: 'all-customers@list', subject: 'We are shutting down', body: 'Effective today.' } } } },\n];"
+      }
+    },
+    {
+      "id": "s3",
+      "name": "Gate",
+      "type": "@n8n/n8n-nodes-langchain.mcpClient",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "serverTransport": "httpStreamable",
+        "endpointUrl": "https://typesafe.taifoon.dev/mcp",
+        "authentication": "bearerAuth",
+        "tool": {
+          "__rl": true,
+          "mode": "id",
+          "value": "typesafe_gate"
+        },
+        "inputMode": "json",
+        "jsonInput": "={{ JSON.stringify({ action: $json.action, context: $json.context }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "1",
+          "name": "TypeSafe key (Bearer)"
+        }
+      }
+    },
+    {
+      "id": "s4",
+      "name": "Verdict",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c-allow",
+                    "leftValue": "={{ $json.structuredContent.verdict }}",
+                    "rightValue": "allow",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "allow"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c-deny",
+                    "leftValue": "={{ $json.structuredContent.verdict }}",
+                    "rightValue": "deny",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "deny"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "review"
+        }
+      }
+    },
+    {
+      "id": "e1",
+      "name": "Execute the tool call",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        900,
+        -180
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "e2",
+      "name": "Block and log",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        900,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "e3",
+      "name": "Ask a person",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        900,
+        180
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "n1",
+      "name": "Note 1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -330
+      ],
+      "parameters": {
+        "content": "## Approval gate for tool calls\nBefore an agent runs a tool, ask a model that only judges whether it may.\n\n**Gate** calls the `typesafe_gate` tool of the MCP server at `typesafe.taifoon.dev/mcp`. It returns `allow`, `deny` or `review` with the probabilities behind it, in well under a second.\n\n**Setup:** create a *Bearer Auth* credential holding your own TypeSafe key (console.typesafe.ai). Set *Authentication* to *None* to try it with 3 free calls.",
+        "width": 460,
+        "height": 280
+      }
+    },
+    {
+      "id": "n2",
+      "name": "Note 2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        620,
+        -330
+      ],
+      "parameters": {
+        "content": "## Fail closed\nOnly an explicit `allow` runs the tool and only an explicit `deny` blocks it. **Anything else goes to a person**: an unsure answer, an answer that did not validate, an outage.\n\nTune `allow_at`, `deny_at` and `policy` in the Gate's JSON. The probabilities are raw model output: check them against a few dozen of your own examples.",
+        "width": 460,
+        "height": 240
+      }
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Proposed tool calls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proposed tool calls": {
+      "main": [
+        [
+          {
+            "node": "Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gate": {
+      "main": [
+        [
+          {
+            "node": "Verdict",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verdict": {
+      "main": [
+        [
+          {
+            "node": "Execute the tool call",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Block and log",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ask a person",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}

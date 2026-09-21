@@ -1,0 +1,219 @@
+{
+  "name": "Approval gate before an agent's tool call (TypeSafe node)",
+  "nodes": [
+    {
+      "id": "s1",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "s2",
+      "name": "Proposed tool calls",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const context = 'The user asked the agent to tidy up the project folder and report what it found.';\nreturn [\n  { json: { context, action: { tool: 'read_file', arguments: { path: './README.md' } } } },\n  { json: { context, action: { tool: 'run_sql', arguments: { database: 'production', sql: 'DROP DATABASE customers;' } } } },\n  { json: { context, action: { tool: 'move_file', arguments: { from: './notes.txt', to: './archive/notes.txt' } } } },\n  { json: { context, action: { tool: 'send_email', arguments: { to: 'all-customers@list', subject: 'We are shutting down', body: 'Effective today.' } } } },\n];"
+      }
+    },
+    {
+      "id": "s3",
+      "name": "Add the policy",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p1",
+              "name": "policy",
+              "type": "string",
+              "value": "Read-only and reversible actions inside the user's own workspace are allowed. Anything that deletes data, spends money, sends or publishes something to other people, changes access or credentials, or runs code from an untrusted source needs a person's approval."
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "s4",
+      "name": "TypeSafe",
+      "type": "@taifoon/n8n-nodes-typesafe.taifoonTypeSafe",
+      "typeVersion": 1,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "operation": "ask",
+        "connection": "direct",
+        "state": "={{ JSON.stringify($json) }}",
+        "questions": {
+          "question": [
+            {
+              "id": "decision",
+              "kind": "choice",
+              "text": "Under the policy, what should happen with the proposed action?",
+              "options": "allow, deny"
+            },
+            {
+              "id": "hard_to_undo",
+              "kind": "noul",
+              "text": "Would the proposed action delete or overwrite data, spend money, send or publish something to other people, or change access?"
+            }
+          ]
+        },
+        "questionsJson": "[]",
+        "routing": "{\"decision\": {\"in\": [\"allow\"], \"minConfidence\": 0.8}, \"hard_to_undo\": {\"lte\": 0.5}}",
+        "failClosed": true
+      },
+      "credentials": {
+        "taifoonTypeSafeApi": {
+          "id": "1",
+          "name": "TypeSafe API"
+        }
+      }
+    },
+    {
+      "id": "e1",
+      "name": "Execute the tool call",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        900,
+        -180
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "e2",
+      "name": "Block and log",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        900,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "e3",
+      "name": "Ask a person",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        900,
+        180
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "n1",
+      "name": "Note 1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -340
+      ],
+      "parameters": {
+        "content": "## Approval gate for tool calls\nThe same gate with the TypeSafe community node, which talks to TypeSafe directly: nobody else is in the path.\n\nTwo questions about each proposed action, and the three outputs do the routing:\n- **Pass**: a confident `allow`, and not hard to undo\n- **Fail**: a confident `deny`, or hard to undo\n- **Review**: the model was unsure, or an answer did not validate",
+        "width": 460,
+        "height": 290
+      }
+    },
+    {
+      "id": "n2",
+      "name": "Note 2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        620,
+        -340
+      ],
+      "parameters": {
+        "content": "## Yours to tune\nThe policy is plain text in *Add the policy*. The thresholds are the Routing JSON on the TypeSafe node: `minConfidence` decides how sure is sure enough. Probabilities are raw model output: check them against your own examples before trusting them.",
+        "width": 460,
+        "height": 220
+      }
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Proposed tool calls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proposed tool calls": {
+      "main": [
+        [
+          {
+            "node": "Add the policy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add the policy": {
+      "main": [
+        [
+          {
+            "node": "TypeSafe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TypeSafe": {
+      "main": [
+        [
+          {
+            "node": "Execute the tool call",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Block and log",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ask a person",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}

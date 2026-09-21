@@ -283,6 +283,7 @@ are retried with backoff. Input is text or JSON; no images or audio.
 
 ## More
 
+[TypeSafe over MCP, and an approval gate for agent tool calls](docs/MCP.md) ·
 [Supplying keys securely](docs/SECURE_KEYS.md) · [Workflow patterns](docs/WORKFLOWS.md) ·
 [How Translate works, rule by rule](docs/TRANSLATION.md) · [Trading gates in eleven languages](docs/TRADING_GATES.md) · [Key policy and rotation](docs/KEY_POLICY.md)
 
