@@ -21,6 +21,8 @@ jobs:
       - run: npm run build
       - name: Translator self-test
         run: npx --yes tsx nodes/TaifoonTypeSafe/translate.selftest.mjs
+      - name: The author email is a real mailbox (n8n sends its ownership token there; a noreply address receives nothing)
+        run: node -e "const e=(require('./package.json').author||{}).email||''; if(!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(e)||/noreply/i.test(e)){console.error('author.email must be a reachable mailbox, got:',e); process.exit(1)}"
       - name: The tag must match package.json
         run: test "v$(node -p "require('./package.json').version")" = "${{ github.event.release.tag_name }}"
       - run: npm publish --provenance --access public
