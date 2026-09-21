@@ -38,7 +38,7 @@ async function withBackoff<T>(call: () => Promise<T>): Promise<T> {
 
 /** The free trial needs no credential, so it lives outside execute(): n8n's lint (rightly) forbids an
  *  unauthenticated httpRequest inside a function that also reads credentials. */
-const TRIAL_URL = 'https://deck.taifoon.dev/api/typed/trial';
+const TRIAL_URL = 'https://typesafe.taifoon.dev/v1/trial';
 async function askTrial(ctx: IExecuteFunctions, body: IDataObject): Promise<IDataObject> {
 	return (await ctx.helpers.httpRequest({ method: 'POST', url: TRIAL_URL, body, json: true, timeout: 60000 })) as IDataObject;
 }
