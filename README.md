@@ -29,7 +29,9 @@ item ──► TypeSafe ──► Pass      confident, and it cleared your thres
    gathers the item    ──►  turns your words into      ──►  answers each question
    runs the branches        typed questions                 with a probability
         ▲                   turns the answers back    ◄──
-        └────────────────   into Pass / Fail / Review
+        └────────────────   into Pass / Fail / Review,
+                            and into sentences in the
+                            asker's own language
 ```
 
 - **n8n** is where your process already lives: the triggers, the data, the people who get notified.
@@ -40,7 +42,8 @@ item ──► TypeSafe ──► Pass      confident, and it cleared your thres
   in, it compiles what you mean ("is this a refund?") into the three question types the model
   understands. Coming out, it compiles the model's probabilities into the only three things a workflow
   can act on: go ahead, do not, or ask a human. Every threshold in that step is yours and sits on the
-  canvas where you can see it.
+  canvas where you can see it. And when a person is waiting on the other end, it says the answers back
+  as sentences in the language they wrote in.
 
 Why three outputs and not two: a yes/no forces a confident answer even when the model is guessing, and
 that is how automations go wrong silently. **Review** is the honest third option. It is where the
@@ -122,6 +125,110 @@ It is deliberately literal. It will not invent categories you did not name: *"cl
 with no list comes back flagged `needs_input`. It suggests thresholds but never applies them for you,
 for the reason in the next section.
 
+## Answering people in their own language
+
+Branches are for workflows. When a person is waiting for the answer (a support chat, a Telegram bot, a
+trading assistant), `{"noul": 0.97}` is no use to them. Set **Reply Language** on the Ask operation and
+the output gains a `reply`:
+
+```json
+{ "lang": "de", "flagHuman": true,
+  "text": "Prüfe, ob die Volatilität ungewöhnlich hoch ist. Ja (94 % sicher)\n? Bewerte die Dringlichkeit ... Vermutlich 4 (4 von 5), aber unsicher (36 %)\nNicht sicher genug: Ich gebe das an einen Menschen weiter.",
+  "lines": [{ "id": "...", "question": "...", "answer": "...", "outcome": "review" }], "verdict": "..." }
+```
+
+- **Match Questions** answers in the language the questions were written in, so one workflow serves
+  every customer. Or pin a language: English questions, Polish answers.
+- It is templates, not a model: free, offline, and the same answers always read the same. The person's
+  own sentence, options and rubric levels are echoed exactly as they wrote them; only the glue around
+  them is translated, so nothing is paraphrased and nothing is invented.
+- It never rounds doubt away. A coin-flip reads as *hard to say*, not yes. A rating the model is spread
+  across reads as *probably 4, but not sure*. And when anything went to Review, `flagHuman` is true and the
+  last line says a person is taking over. Wire that to a person, do not soften it.
+
+The same eleven languages as Translate, and the same request: a voice is one row of thirteen short
+strings in [`translate.ts`](nodes/TaifoonTypeSafe/translate.ts). Native speakers, please correct ours.
+
+## Basic trading tasks, with gates
+
+A worked example of the whole loop on something less forgiving than support tickets. These are real:
+live 5-minute candles, the real model, run on 2026-09-21. A program computed the facts first
+(averages, ranges, volatility ratios, whether the New York morning session is open); each task is
+written the way a person would type it, one per language; the gates are plain thresholds in code.
+
+**A pre-trade entry gate, in English** (NQ, 798 ms, left by **Fail**)
+
+> Check if price is above its 20-bar average. Check if the last hour's move is larger than usual for this market. Classify the market into trending up, trending down or ranging. Rate how stretched price is from its average from 1 to 5.
+
+| compiled to | gate |
+|---|---|
+| noul | `gte` 0.7 |
+| noul | `lte` 0.5 |
+| choice | `minConfidence` 0.6, `in` trending up |
+| score | `max` 2 |
+
+```
+✓ Check if price is above its 20-bar average. Yes (99% sure)
+✗ Check if the last hour's move is larger than usual for this market. Yes (94% sure)
+✓ Classify the market into trending up, trending down or ranging. trending up (86% confident)
+✓ Rate how stretched price is from its average from 1 to 5. 2 (2 of 5), 55% confident
+At least one check did not pass.
+```
+
+The second check failed on purpose: the gate wants a calm last hour (`lte 0.5`) and the hour was not calm.
+That is a gate doing its job, not the model being wrong.
+
+**A pre-trade order sanity check, in Japanese** (BTC, 301 ms, left by **Review**)
+
+> この注文の数量は通常より異常に大きいですか。指値は現在の価格から大きく離れていますか。この注文を次のいずれかに分類してください：通常、要確認、誤発注の疑い。
+
+| compiled to | gate |
+|---|---|
+| noul | `lte` 0.3 |
+| noul | `lte` 0.3 |
+| choice | `minConfidence` 0.6, `in` 通常 |
+
+```
+✓ この注文の数量は通常より異常に大きいですか。 いいえ（確信度86%）
+✓ 指値は現在の価格から大きく離れていますか。 いいえ（確信度94%）
+? この注文を次のいずれかに分類してください：通常、要確認、誤発注の疑い。 おそらく通常ですが、確信はありません（46%）
+確信が足りないため、担当者に確認を依頼します。
+```
+
+Both yes/no checks passed, but the model would not commit to a category, so the order goes to a person.
+That is what Review is for. (The order is a sample ticket measured against the real last price.)
+
+**An exit guard, in German** (BTC, 663 ms, left by **Review**)
+
+> Prüfe, ob der Kurs unter dem 20-Perioden-Durchschnitt liegt. Prüfe, ob die Volatilität ungewöhnlich hoch ist. Bewerte die Dringlichkeit, eine Long-Position zu verkleinern, von 1 bis 5.
+
+| compiled to | gate |
+|---|---|
+| noul | reported, not gated |
+| noul | reported, not gated |
+| score | `min` 3, `minConfidence` 0.5 |
+
+```
+Prüfe, ob der Kurs unter dem 20-Perioden-Durchschnitt liegt. Nein (99 % sicher)
+Prüfe, ob die Volatilität ungewöhnlich hoch ist. Ja (94 % sicher)
+? Bewerte die Dringlichkeit, eine Long-Position zu verkleinern, von 1 bis 5. Vermutlich 4 (4 von 5), aber unsicher (36 %)
+Nicht sicher genug: Ich gebe das an einen Menschen weiter.
+```
+
+A rating is a centre of mass. Without `minConfidence` this one would have cleared `min 3` while the model
+was only about a third sure. We found that in this very run, which is why a rating gate can now ask for
+confidence too.
+
+All eleven languages, with the facts the model was shown: [docs/TRADING_GATES.md](docs/TRADING_GATES.md).
+Across the run, 11 of 11 languages were detected, the model's reading of the first fact matched plain code in
+11 of 11, the median call took 295 ms, and all 11 calls together cost 0.000331 USD.
+
+**What this is not.** These gates describe and guard a state a program has already measured. They do not
+forecast. We tested that hard: six pre-registered trials on these same markets, and no model (this one,
+Claude, or our own) forecast direction. A model in a trading loop supplies judgment about *now*; it does
+not create an edge, and a strategy without one loses faster with a model in it. Keep the arithmetic, the
+thresholds and every veto in code.
+
 ## The one rule about routing
 
 An item leaves by **Pass** only if *every* question you put in Routing passed. So only route the
@@ -132,7 +239,7 @@ questions you actually want to gate on. If you route `urgency` as well, a perfec
 |---|---|---|
 | Yes / no | `gte`, `lte` on `p` | pass or fail |
 | Pick one | `minConfidence`, and `in` for the options you accept | below the confidence → **Review** |
-| Rate it | `min`, `max` on the level | pass or fail |
+| Rate it | `min`, `max` on the level, and optionally `minConfidence` | pass or fail; below the confidence → **Review** |
 
 Two details: a rating is a **zero-based level number** (0 is your first level; every answer includes a
 `legend`), and an answer that does not validate always goes to Review. Nothing fails open.
@@ -171,7 +278,7 @@ are retried with backoff. Input is text or JSON; no images or audio.
 ## More
 
 [Supplying keys securely](docs/SECURE_KEYS.md) · [Workflow patterns](docs/WORKFLOWS.md) ·
-[How Translate works, rule by rule](docs/TRANSLATION.md) · [Key policy and rotation](docs/KEY_POLICY.md)
+[How Translate works, rule by rule](docs/TRANSLATION.md) · [Trading gates in eleven languages](docs/TRADING_GATES.md) · [Key policy and rotation](docs/KEY_POLICY.md)
 
 This package integrates one service: TypeSafe. It is published from GitHub Actions with an npm provenance
 statement, and every release must pass n8n's community-package scanner.

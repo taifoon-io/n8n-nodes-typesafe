@@ -50,3 +50,43 @@ threshold on your own labelled items, and leave a question unrouted until you ha
 With `jev`, state is any JSON up to 96,000 characters: `{{ JSON.stringify($json) }}` sends the whole
 incoming item. Compute first, judge second: do arithmetic in a Code node and send the result; ask the
 model for judgment, never for a sum.
+
+## The reply: answers back into sentences
+
+The third leg, for chat surfaces. `reply(answers, { questions, decisions, branch, lang })` returns
+`{ lang, lines, verdict, flagHuman, text }`. It is the same kind of code as the rest: templates, no model.
+
+| Answer | How it is said (English voice) |
+|---|---|
+| yes/no, p at least 0.8 | `Yes (97% sure)` |
+| 0.6 to 0.8 | `Probably yes (74%)` |
+| 0.4 to 0.6 | `Hard to say (52% likely)`: never yes, never no |
+| 0.2 to 0.4 | `Probably not (70%)`: the percentage is how sure it is of NO |
+| under 0.2 | `No (97% sure)` |
+| pick one | `billing (93% confident)`; sent to Review, or under 0.6 with no gate: `Probably billing, but not sure (41%)` |
+| rate it | the level's own label and its place: `Medium (3 of 5), 70% confident`; under 0.4, or sent to Review: `Probably Medium (3 of 5), but not sure (33%)` |
+| did not validate | `No valid answer`: never read as a no |
+| a selection with no options | not asked; the person is told `List the options to choose between, and I will pick one.` |
+
+Rules that keep it honest:
+
+1. **Echo, do not paraphrase.** Each line starts with the clause exactly as the person wrote it
+   (`source`, kept by Translate), and options and levels are the person's own words. Only the glue is translated.
+2. **The language is the asker's.** Pinned, or the language most of the questions were written in.
+3. **A verdict states an outcome, never an action.** `Every check passed.`, not "going ahead": on an exit
+   guard, passing does not mean go.
+4. **Review is said out loud.** `flagHuman` is true when any line went to Review, and the last line says a
+   person is taking over.
+5. **A rating is a centre of mass.** The value is fractional (3.24 on a five-level scale is "between 4 and
+   5, nearer 4"); the reply names the nearest level and, when confidence is low, says it is unsure. A gate on
+   a rating can carry `minConfidence` so an unsure rating goes to Review instead of clearing `min` by accident.
+
+Adding a voice is adding one row to `VOICES` and one line to the self-test.
+
+### What the first real run caught
+
+We ran eleven trading tasks in eleven languages against the real model before shipping this, and it found
+bugs no unit test had: French `moyenne sur 20 bougies` was read as a rating "out of 20" (a number that
+counts something is not a scale); the Arabic feminine lead `مما إذا كانت` left a stray letter, and removing
+a scale left its `من` dangling; a German question ended in `,?`; our English scale notes `(lowest)` leaked
+into Russian replies. Each is now a regression check. The self-test has 107.
