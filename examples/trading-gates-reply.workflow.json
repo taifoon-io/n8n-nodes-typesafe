@@ -38,7 +38,7 @@
         100
       ],
       "credentials": {
-        "typeSafeApi": {
+        "taifoonTypeSafeApi": {
           "name": "TypeSafe API"
         }
       },
@@ -78,7 +78,7 @@
         300
       ],
       "credentials": {
-        "typeSafeApi": {
+        "taifoonTypeSafeApi": {
           "name": "TypeSafe API"
         }
       },
@@ -118,7 +118,7 @@
         500
       ],
       "credentials": {
-        "typeSafeApi": {
+        "taifoonTypeSafeApi": {
           "name": "TypeSafe API"
         }
       },

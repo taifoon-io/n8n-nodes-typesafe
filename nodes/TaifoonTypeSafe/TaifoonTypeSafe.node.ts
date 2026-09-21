@@ -41,6 +41,17 @@ function nextStep(status: number, connection: string): string | undefined {
 	return undefined;
 }
 
+/** A server that says when to come back is believed, up to 30 s: `Retry-After` in seconds or as an HTTP date. */
+function retryAfterMs(error: unknown): number | undefined {
+	const headers = (error as { response?: { headers?: Record<string, unknown> } }).response?.headers
+		?? (error as { cause?: { response?: { headers?: Record<string, unknown> } } }).cause?.response?.headers;
+	const raw = headers?.['retry-after'] ?? headers?.['Retry-After'];
+	if (raw === undefined || raw === null || raw === '') return undefined;
+	const secs = Number(raw);
+	const ms = Number.isFinite(secs) ? secs * 1000 : Date.parse(String(raw)) - Date.now();
+	return Number.isFinite(ms) && ms >= 0 ? Math.min(ms, 30000) : undefined;
+}
+
 /** TypeSafe asks for exponential backoff on 429 (rate limited) and 529 (overloaded). */
 async function withBackoff<T>(node: INode, call: () => Promise<T>): Promise<T> {
 	for (let attempt = 0; ; attempt++) {
@@ -49,7 +60,7 @@ async function withBackoff<T>(node: INode, call: () => Promise<T>): Promise<T> {
 		} catch (error) {
 			const status = Number((error as { httpCode?: string | number; response?: { status?: number } }).httpCode ?? (error as { response?: { status?: number } }).response?.status);
 			if ((status === 429 || status === 529) && attempt < 3) {
-				await sleep(500 * 2 ** attempt);
+				await sleep(retryAfterMs(error) ?? 500 * 2 ** attempt);
 				continue;
 			}
 			throw new NodeApiError(node, safeError(error));
@@ -79,7 +90,7 @@ export class TaifoonTypeSafe implements INodeType {
 		outputNames: ['Pass', 'Fail', 'Review'],
 		usableAsTool: true,
 		credentials: [
-			{ name: 'typeSafeApi', required: true, displayOptions: { show: { operation: ['ask'], connection: ['direct'] } } },
+			{ name: 'taifoonTypeSafeApi', required: true, displayOptions: { show: { operation: ['ask'], connection: ['direct'] } } },
 		],
 		properties: [
 			{ displayName: 'Operation', name: 'operation', type: 'options', noDataExpression: true, default: 'ask',
@@ -167,16 +178,19 @@ export class TaifoonTypeSafe implements INodeType {
 				let answers: AnswerLike[] = [];
 				let meta: IDataObject = {};
 				if (connection === 'direct') {
-					const cred = await this.getCredentials('typeSafeApi');
+					const cred = await this.getCredentials('taifoonTypeSafeApi');
 					const questions: Record<string, IDataObject> = {};
 					for (const q of qs) {
 						questions[q.id] = q.kind === 'choice' ? { type: 'choice', instructions: q.text, criteria: Object.fromEntries(split(q.options, /\s*,\s*/).map((o) => [o, o])) }
 							: q.kind === 'score' ? { type: 'score', instructions: q.text, criteria: split(q.levels, /\s*\|\s*/) }
 							: { type: 'noul', instructions: q.text };
 					}
-					const req: IHttpRequestOptions = { method: 'POST', url: `${String(cred.baseUrl || 'https://api.typesafe.ai').replace(/\/$/, '')}/v1/systemone`, body: { model: 'jev-latest', state, questions }, json: true, timeout: 60000 };
+					const base = String(cred.baseUrl || 'https://api.typesafe.ai').replace(/\/$/, '');
+					// a key is only ever sent over TLS: a typo or a pasted http:// address must not leak it
+					if (!/^https:\/\/[^\s/]+/i.test(base)) throw new NodeOperationError(this.getNode(), 'The Base URL in the TypeSafe API credential must start with https://', { itemIndex: i });
+					const req: IHttpRequestOptions = { method: 'POST', url: `${base}/v1/systemone`, body: { model: 'jev-latest', state, questions }, json: true, timeout: 60000 };
 					const started = Date.now();
-					const res = (await withBackoff(this.getNode(), () => this.helpers.httpRequestWithAuthentication.call(this, 'typeSafeApi', req))) as { model?: string; answers?: Record<string, IDataObject>; usage?: IDataObject };
+					const res = (await withBackoff(this.getNode(), () => this.helpers.httpRequestWithAuthentication.call(this, 'taifoonTypeSafeApi', req))) as { model?: string; answers?: Record<string, IDataObject>; usage?: IDataObject };
 					answers = qs.map((q) => {
 						const a = (res.answers ?? {})[q.id];
 						if (!a) return { id: q.id, kind: q.kind, schema_ok: false, value: null };
