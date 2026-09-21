@@ -18,7 +18,7 @@ n8n can pre-fill a credential type for the whole instance from a **secrets file*
 credential TYPE name this package registers:
 
 ```json
-{"typeSafeApi":{"apiKey":"<your TypeSafe key>","baseUrl":"https://api.typesafe.ai"}}
+{"taifoonTypeSafeApi":{"apiKey":"<your TypeSafe key>","baseUrl":"https://api.typesafe.ai"}}
 ```
 
 ```yaml
