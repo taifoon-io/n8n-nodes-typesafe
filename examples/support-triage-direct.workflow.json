@@ -1,0 +1,172 @@
+{
+  "name": "TypeSafe \u2014 support triage (direct, bring your own key)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "e1",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a",
+              "name": "subject",
+              "value": "Charged twice this month",
+              "type": "string"
+            },
+            {
+              "id": "b",
+              "name": "body",
+              "value": "I was billed on the 1st and again on the 3rd. Please refund one. Order 88231.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e2",
+      "name": "Ticket",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "ask",
+        "connection": "direct",
+        "state": "={{ JSON.stringify($json) }}",
+        "questions": {
+          "question": [
+            {
+              "id": "is_refund",
+              "kind": "noul",
+              "text": "Is the customer asking for money back?"
+            },
+            {
+              "id": "team",
+              "kind": "choice",
+              "text": "Which team should handle this?",
+              "options": "billing, technical, sales, abuse"
+            },
+            {
+              "id": "urgency",
+              "kind": "score",
+              "text": "How urgent is this?",
+              "levels": "None | Low | Medium | High"
+            }
+          ]
+        },
+        "questionsJson": "[]",
+        "routing": "{\"team\": {\"minConfidence\": 0.6}}",
+        "failClosed": true
+      },
+      "id": "e3",
+      "name": "TypeSafe",
+      "type": "@taifoon/n8n-nodes-typesafe.taifoonTypeSafe",
+      "typeVersion": 1,
+      "position": [
+        460,
+        0
+      ],
+      "credentials": {
+        "typeSafeApi": {
+          "id": "1",
+          "name": "TypeSafe API"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "e4",
+      "name": "Route to the team",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        720,
+        -120
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "e5",
+      "name": "Not accepted",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "e6",
+      "name": "Human inbox",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        720,
+        120
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ticket": {
+      "main": [
+        [
+          {
+            "node": "TypeSafe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TypeSafe": {
+      "main": [
+        [
+          {
+            "node": "Route to the team",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Not accepted",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Human inbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

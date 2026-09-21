@@ -1,0 +1,1 @@
+{ "node": "n8n-nodes-taifoon-typesafe.taifoonTypeSafe", "nodeVersion": "1.0", "codexVersion": "1.0", "categories": ["AI", "Data & Storage"], "resources": { "primaryDocumentation": [{ "url": "https://docs.typesafe.ai/introduction" }] } }
