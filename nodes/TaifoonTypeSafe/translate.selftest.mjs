@@ -96,4 +96,29 @@ t("reply: a rating sent to review reads as unsure even at 40%", reply([{ id: "c"
 const ni = translateTask("Sklasyfikuj rynek.").questions;
 t("reply: a selection with no options is asked for in the person's language, and nothing is answered", reply([], { needsInput: ni }).lang === "pl" && reply([], { needsInput: ni }).text === "Sklasyfikuj rynek. Podaj opcje do wyboru, a wybiorę jedną.");
 t("reply: every voice can ask for options", LANGS.every((l) => reply([], { lang: l, needsInput: [{ id: "x", text: "X" }] }).lines[0].answer.length > 10));
+// fail-closed edges of decide(): a configuration mistake must never read as a pass (_DECIDE_FAILCLOSED_v1_, 2026-09-21)
+const ok99 = [{ id: "a", kind: "noul", schema_ok: true, p: 0.99, value: true }];
+t("decide: a yes/no exactly at the bar passes (inclusive)", decide([{ id: "a", kind: "noul", schema_ok: true, p: 0.5, value: true }], { a: { gte: 0.5 } }).branch === "pass");
+t("decide: a yes/no routed with no threshold goes to review, never pass", decide([{ id: "a", kind: "noul", schema_ok: true, p: 0.01, value: false }], { a: {} }).branch === "review");
+t("decide: a confidence bar on a pick with no confidence field goes to review", decide([{ id: "c", kind: "choice", schema_ok: true, value: "x", confidence: null }], { c: { in: ["x"], minConfidence: 0.6 } }).branch === "review");
+t("decide: a confidence bar on a rating with no confidence field goes to review", decide([{ id: "s", kind: "score", schema_ok: true, value: 3 }], { s: { min: 2, minConfidence: 0.5 } }).branch === "review");
+t("decide: routing that names a question nobody asked goes to review, even when the rest pass", decide(ok99, { a: { gte: 0.5 }, typo_id: { gte: 0.9 } }).branch === "review");
+t("decide: routing that ONLY names an unknown question goes to review", decide(ok99, { typo_id: { gte: 0.9 } }).branch === "review");
+t("decide: a pick outside the accepted set is a fail, a rating between levels is compared as a number", decide([{ id: "c", kind: "choice", schema_ok: true, value: "y", confidence: 0.9 }], { c: { in: ["x"] } }).branch === "fail" && decide([{ id: "s", kind: "score", schema_ok: true, value: 1.49, confidence: 0.9 }], { s: { min: 2 } }).branch === "fail");
+// what the translator does with awkward phrasing: never a silent substitution (_TRANSLATE_MATRIX_v1_, 2026-09-21)
+const q1 = (task) => translateTask(task).questions;
+t("scale: 'from 5 to 1' is the 1 to 5 scale said backwards", q1("Rate the urgency from 5 to 1.")[0].levels.length === 5 && q1("Rate the urgency from 5 to 1.")[0].levels[0] === "1 (lowest)");
+t("scale: 0 to 10 has 11 steps, more than a rating can have: the rubric is used AND the question says so", q1("Rate the urgency from 0 to 10.")[0].levels.length === 4 && /11 steps/.test(q1("Rate the urgency from 0 to 10.")[0].warning ?? ""));
+t("scale: 0 to 100 is caught too, and the numbers leave the question text", /101 steps/.test(q1("Rate the urgency from 0 to 100.")[0].warning ?? "") && !/100/.test(q1("Rate the urgency from 0 to 100.")[0].text));
+t("scale: a 1 to 10 scale is exactly the maximum and carries no warning", q1("Rate the urgency on a scale of 1 to 10.")[0].levels.length === 10 && !q1("Rate the urgency on a scale of 1 to 10.")[0].warning);
+t("levels the person named are used, in their order, not replaced by the default rubric", JSON.stringify(q1("Rate the urgency as low, medium or high.")[0].levels) === JSON.stringify(["low", "medium", "high"]));
+t("de: named levels", JSON.stringify(q1("Bewerte die Dringlichkeit als niedrig, mittel oder hoch.")[0].levels) === JSON.stringify(["niedrig", "mittel", "hoch"]));
+t("a yes/no that names alternatives runs, and warns that it answers EITHER, not which", q1("Decide whether the tone is polite or rude.")[0].kind === "noul" && /EITHER/.test(q1("Decide whether the tone is polite or rude.")[0].warning ?? ""));
+t("a plain yes/no carries no warning", !q1("Is the customer asking for a refund?")[0].warning);
+t("two jobs joined by 'and' become two questions", q1("Check if it is a refund and rate the urgency from 1 to 5.").map((x) => x.kind).join() === "noul,score");
+const three = q1("Check if it is a refund, classify the ticket into billing, technical or sales and rate the urgency from 1 to 5.");
+t("three jobs in one sentence become three questions, and no option swallows a verb phrase", three.map((x) => x.kind).join() === "noul,choice,score" && JSON.stringify(three[1].options) === JSON.stringify(["billing", "technical", "sales"]));
+t("'and' between options does not split a selection", q1("Classify the ticket into billing, technical and sales.").length === 1 && q1("Classify the ticket into billing, technical and sales.")[0].options.length === 3);
+t("'and' inside a plain yes/no does not split it", q1("Is the customer angry and asking for a manager?").length === 1);
+t("de: two jobs joined by 'und' become two questions", q1("Prüfe, ob es eine Rückerstattung ist und bewerte die Dringlichkeit von 1 bis 5.").map((x) => x.kind).join() === "noul,score");
 console.log(fails ? `\nSELF-TEST RED · ${fails} failed` : "\nSELF-TEST GREEN"); process.exit(fails ? 1 : 0);

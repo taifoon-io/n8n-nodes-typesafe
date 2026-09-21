@@ -27,6 +27,9 @@ export interface Compiled {
   explain: string;
   /** set when the task named a primitive but not enough to run it */
   needs_input?: string;
+  /** set when the translator had to do something the person did not literally ask for (a scale it cannot represent,
+   *  an ambiguous either/or): the question still runs, and the person should read this before trusting it */
+  warning?: string;
   /** a sane starting threshold for the backward half. A default, never a fit. */
   routing: Route;
 }
@@ -156,17 +159,23 @@ export function extractOptions(clause: string, lang: Lang = "en"): string[] {
   return uniq.length >= 2 ? uniq.slice(0, 50) : [];
 }
 
-function levelsFor(clause: string, lang: Lang): { levels: string[]; why: string; matched: string | null } {
+function levelsFor(clause: string, lang: Lang): { levels: string[]; why: string; matched: string | null; warning?: string } {
   const p = PACKS[lang];
   const r = clause.match(p.loose
-    ? new RegExp(`${p.from ? `(?:(?:${p.from})\\s*)?` : ""}(\\d{1,2})\\s*(?:-|–|—|〜|~|${p.to})\\s*(\\d{1,2})|(\\d{1,2})\\s*(?:${p.outOf})`, "iu")
-    : new RegExp(`${NB}(?:(?:${p.from})\\s+)?(\\d{1,2})\\s*(?:-|–|—|${NB}(?:${p.to})${NA})\\s*(\\d{1,2})${NA}|${NB}(?:${p.outOf})\\s+(\\d{1,2})${NA}(?!\\s*\\p{L})`, "iu"));
+    ? new RegExp(`${p.from ? `(?:(?:${p.from})\\s*)?` : ""}(\\d{1,3})\\s*(?:-|–|—|〜|~|${p.to})\\s*(\\d{1,3})|(\\d{1,3})\\s*(?:${p.outOf})`, "iu")
+    : new RegExp(`${NB}(?:(?:${p.from})\\s+)?(\\d{1,3})\\s*(?:-|–|—|${NB}(?:${p.to})${NA})\\s*(\\d{1,3})${NA}|${NB}(?:${p.outOf})\\s+(\\d{1,3})${NA}(?!\\s*\\p{L})`, "iu"));
   if (r) {
-    const lo = r[3] ? 1 : Number(r[1]);
-    const hi = r[3] ? Number(r[3]) : Number(r[2]);
+    const first = r[3] ? 1 : Number(r[1]);
+    const second = r[3] ? Number(r[3]) : Number(r[2]);
+    const lo = Math.min(first, second); const hi = Math.max(first, second);   // "from 5 to 1" is the same scale, said backwards
     const n = hi - lo + 1;
-    if (hi > lo && n >= 2 && n <= 10) {
+    if (n >= 2 && n <= 10) {
       return { levels: Array.from({ length: n }, (_, k) => `${lo + k}${k === 0 ? " (lowest)" : k === n - 1 ? " (highest)" : ""}`), why: `the task names a ${lo} to ${hi} scale`, matched: r[0] };
+    }
+    if (n > 10) {
+      // TypeSafe takes at most 10 levels. Substituting silently would answer a question nobody asked.
+      return { levels: [...p.rubric], why: `the task names a ${lo} to ${hi} scale (${n} steps), more than the 10 levels a rating can have`, matched: r[0],
+        warning: `a ${lo} to ${hi} scale has ${n} steps and a rating takes at most 10 levels, so the default ${p.rubric.length}-level rubric is used instead: the answer is a level on THAT rubric, not a number from ${lo} to ${hi}. Name a scale of up to 10 steps or write your own levels.` };
     }
   }
   return { levels: [...p.rubric], why: "no scale was named, so a four-level rubric is used: replace it with your own", matched: null };
@@ -193,7 +202,15 @@ const asQuestion = (c: string, lang: Lang) => {
 
 /** FORWARD: task -> battery. `lang` pins a language; otherwise each clause is detected on its own, so a mixed task works. */
 export function translateTask(task: string, maxQuestions = 8, lang?: Lang): { questions: Compiled[]; dropped: number; notes: string[]; langs: Lang[] } {
-  const all = clauses(task);
+  // "Check if it is a refund, classify it into a, b or c and rate the urgency": several jobs in one sentence.
+  // Split before a comma or a conjunction that is followed by a trigger verb.
+  const all = clauses(task).flatMap((c) => {
+    const l = detectLang(c, lang); const pk = PACKS[l];
+    if (pk.loose || !pk.and) return [c];
+    // the word right after the comma or the conjunction must be a trigger verb, so "billing, technical and sales" is left alone
+    const parts = c.split(new RegExp(`\\s*(?:,\\s+(?:(?:${pk.and})\\s+)?|\\s+(?:${pk.and})\\s+)(?=(?:${pk.choice}|${pk.score}${pk.lead ? `|${pk.lead}` : ""})${NA})`, "iu")).map((x) => x.trim()).filter((x) => x.length >= 4);
+    return parts.length > 1 ? parts : [c];
+  }).slice(0, 12);
   const taken = new Set<string>();
   const questions: Compiled[] = [];
   const seen = new Set<Lang>();
@@ -210,11 +227,21 @@ export function translateTask(task: string, maxQuestions = 8, lang?: Lang): { qu
         routing: { minConfidence: 0.6 },
       });
     } else if (RX[l].score.test(c)) {
-      const { levels, why, matched } = levelsFor(c, l);
-      const text = (matched ? c.replace(matched, "") : c).replace(/\s{2,}/g, " ").trim();
-      questions.push({ id: slug(c, taken, l), kind: "score", text: asQuestion(text, l), levels, source: c, lang: l, explain: `a rating verb -> score; ${why}${tag}`, routing: { min: Math.ceil((levels.length - 1) / 2) } });
+      const scale = levelsFor(c, l);
+      // "rate it as low, medium or high": the person wrote the rubric. Use THEIR levels, in their order.
+      const named = scale.matched ? [] : extractOptions(c, l);
+      const useNamed = named.length >= 2 && named.length <= 10;
+      const levels = useNamed ? named : scale.levels;
+      const why = useNamed ? `the task names its own ${named.length} levels` : scale.why;
+      const stem = useNamed ? c.replace(new RegExp(`(?::|${nb(l)}(?:${PACKS[l].intro})${na(l)}[:\\s]).*$`, "iu"), "").trim() || c : c;
+      const text = (scale.matched ? stem.replace(scale.matched, "") : stem).replace(/\s{2,}/g, " ").trim();
+      questions.push({ id: slug(stem, taken, l), kind: "score", text: asQuestion(text, l), levels, source: c, lang: l, explain: `a rating verb -> score; ${why}${tag}`,
+        ...(scale.warning && !useNamed ? { warning: scale.warning } : {}), routing: { min: Math.ceil((levels.length - 1) / 2) } });
     } else {
-      questions.push({ id: slug(c, taken, l), kind: "noul", text: asQuestion(c, l), source: c, lang: l, explain: `a statement that is true or false -> noul (the probability it is true)${tag}`, routing: { gte: 0.5 } });
+      // "is the tone polite or rude?" read as a yes/no has no meaningful yes. It still runs (a genuine "is it A or B" exists), and says so.
+      const eitherOr = !PACKS[l].loose && new RegExp(`${NB}(?:${PACKS[l].or})${NA}`, "iu").test(c);
+      questions.push({ id: slug(c, taken, l), kind: "noul", text: asQuestion(c, l), source: c, lang: l, explain: `a statement that is true or false -> noul (the probability it is true)${tag}`,
+        ...(eitherOr ? { warning: "this names alternatives and is asked as a yes/no: the probability is that EITHER holds, not which one. To get the pick, phrase it as a selection and list the options." } : {}), routing: { gte: 0.5 } });
     }
   }
   const notes = [
@@ -250,12 +277,16 @@ export function decide(answers: AnswerLike[], routing: Record<string, Route>): {
       continue;
     }
     if (a.kind === "noul") {
+      // a yes/no gate with no bar is a configuration mistake, not an open gate
+      if (r.gte === undefined && r.lte === undefined) { decisions.push({ id: a.id, outcome: "review", reason: "routed without a threshold (gte or lte): failing closed to review" }); continue; }
       const p = typeof a.p === "number" ? a.p : a.value === true ? 1 : 0;
       const ok = (r.gte === undefined || p >= r.gte) && (r.lte === undefined || p <= r.lte);
       decisions.push({ id: a.id, outcome: ok ? "pass" : "fail", reason: `p=${p.toFixed(3)} against ${r.gte !== undefined ? `>= ${r.gte}` : ""}${r.lte !== undefined ? ` <= ${r.lte}` : ""}`.trim() });
     } else if (a.kind === "choice") {
       const conf = typeof a.confidence === "number" ? a.confidence : null;
-      if (r.minConfidence !== undefined && conf !== null && conf < r.minConfidence) {
+      if (r.minConfidence !== undefined && conf === null) {
+        decisions.push({ id: a.id, outcome: "review", reason: `a confidence of at least ${r.minConfidence} was asked for and the answer carries none: failing closed to review` });
+      } else if (r.minConfidence !== undefined && conf !== null && conf < r.minConfidence) {
         decisions.push({ id: a.id, outcome: "review", reason: `chose ${String(a.value)} at confidence ${conf.toFixed(2)}, below ${r.minConfidence}: a person should look` });
       } else {
         const ok = !r.in || r.in.includes(String(a.value));
@@ -265,6 +296,10 @@ export function decide(answers: AnswerLike[], routing: Record<string, Route>): {
       const v = Number(a.value);
       const conf = typeof a.confidence === "number" ? a.confidence : null;
       // a rating is a centre of mass: when the model is spread across levels it clears a threshold by accident
+      if (r.minConfidence !== undefined && conf === null) {
+        decisions.push({ id: a.id, outcome: "review", reason: `a confidence of at least ${r.minConfidence} was asked for and the answer carries none: failing closed to review` });
+        continue;
+      }
       if (r.minConfidence !== undefined && conf !== null && conf < r.minConfidence) {
         decisions.push({ id: a.id, outcome: "review", reason: `score ${v} at confidence ${conf.toFixed(2)}, below ${r.minConfidence}: a person should look` });
         continue;
@@ -273,6 +308,9 @@ export function decide(answers: AnswerLike[], routing: Record<string, Route>): {
       decisions.push({ id: a.id, outcome: ok ? "pass" : "fail", reason: `score ${v} against ${r.min !== undefined ? `>= ${r.min}` : ""}${r.max !== undefined ? ` <= ${r.max}` : ""}`.trim() });
     }
   }
+  // a gate that names a question nobody asked (a typo, a renamed id) never ran: that is not a pass
+  const asked = new Set(answers.map((x) => x.id));
+  for (const id of Object.keys(routing)) if (!asked.has(id)) decisions.push({ id, outcome: "review", reason: "routing names a question that was not asked: failing closed to review" });
   const branch = decisions.some((d) => d.outcome === "review") ? "review" : decisions.every((d) => d.outcome === "pass") && decisions.length > 0 ? "pass" : "fail";
   return { decisions, allPass: branch === "pass", branch };
 }
