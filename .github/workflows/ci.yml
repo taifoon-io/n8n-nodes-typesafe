@@ -17,6 +17,8 @@ jobs:
       - run: npm run build
       - name: Translator self-test (eleven languages, both directions)
         run: npx --yes tsx nodes/TaifoonTypeSafe/translate.selftest.mjs
+      - name: The author email is a real mailbox (n8n sends its ownership token there; a noreply address receives nothing)
+        run: node -e "const e=(require('./package.json').author||{}).email||''; if(!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(e)||/noreply/i.test(e)){console.error('author.email must be a reachable mailbox, got:',e); process.exit(1)}"
       - name: No run-time dependencies (required for verified community nodes)
         run: node -e "const p=require('./package.json'); const d=Object.keys(p.dependencies||{}); if(d.length){console.error('run-time dependencies are not allowed:',d); process.exit(1)}"
       - name: The node reads no environment and no file system
