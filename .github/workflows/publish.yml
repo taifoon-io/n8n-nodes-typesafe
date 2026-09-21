@@ -1,0 +1,27 @@
+# Publishes to npm WITH a provenance statement, from GitHub Actions, as n8n requires for nodes
+# submitted for verification (from 2026-05-01). Triggered by publishing a GitHub release.
+name: publish
+on:
+  release:
+    types: [published]
+permissions:
+  contents: read
+  id-token: write          # lets npm sign the provenance statement through GitHub's OIDC
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - name: The tag must match package.json
+        run: test "v$(node -p "require('./package.json').version")" = "${{ github.event.release.tag_name }}"
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          RELEASE_MODE: "true"   # n8n's prepublishOnly guard refuses a publish without it

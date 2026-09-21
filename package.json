@@ -1,0 +1,69 @@
+{
+  "name": "@taifoon/n8n-nodes-typesafe",
+  "version": "0.1.0",
+  "description": "TypeSafe for n8n: ask Jev (a System One model) yes/no, pick-one and rate-it questions about any workflow item and route on calibrated answers. Works directly with your own TypeSafe key; includes a task-to-questions translator and Pass / Fail / Review outputs.",
+  "keywords": [
+    "n8n-community-node-package",
+    "typesafe",
+    "jev",
+    "system-one",
+    "taifoon",
+    "decision",
+    "classification",
+    "routing",
+    "ai"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/taifoon-io/n8n-nodes-typesafe#readme",
+  "author": {
+    "name": "Taifoon",
+    "url": "https://github.com/taifoon-io"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/taifoon-io/n8n-nodes-typesafe.git"
+  },
+  "engines": {
+    "node": ">=20.15"
+  },
+  "main": "index.js",
+  "scripts": {
+    "build": "n8n-node build",
+    "dev": "n8n-node dev",
+    "lint": "n8n-node lint",
+    "lint:fix": "n8n-node lint --fix",
+    "release": "n8n-node release",
+    "prepublishOnly": "n8n-node prerelease"
+  },
+  "files": [
+    "dist",
+    "docs",
+    "LICENSE",
+    "README.md"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "strict": true,
+    "credentials": [
+      "dist/credentials/TypeSafeApi.credentials.js",
+      "dist/credentials/TaifoonGatewayApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/TaifoonTypeSafe/TaifoonTypeSafe.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@n8n/node-cli": "^0.23.0",
+    "eslint": "^9.39.5",
+    "typescript": "5.9.2"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bugs": {
+    "url": "https://github.com/taifoon-io/n8n-nodes-typesafe/issues"
+  }
+}
