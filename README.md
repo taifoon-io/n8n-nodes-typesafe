@@ -173,9 +173,9 @@ are retried with backoff. Input is text or JSON; no images or audio.
 [Supplying keys securely](docs/SECURE_KEYS.md) · [Workflow patterns](docs/WORKFLOWS.md) ·
 [How Translate works, rule by rule](docs/TRANSLATION.md) · [Key policy and rotation](docs/KEY_POLICY.md)
 
-The node also has an optional second connection to the Taifoon gateway, for teams who want metering and
-open-weights models alongside Jev. You do not need it, and it is documented in
-[Key policy](docs/KEY_POLICY.md) rather than here.
+This package integrates one service: TypeSafe. It is published from GitHub Actions with an npm provenance
+statement, and every release must pass n8n's community-package scanner.
+
 
 ## Licence
 

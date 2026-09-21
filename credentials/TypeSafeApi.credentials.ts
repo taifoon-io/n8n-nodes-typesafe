@@ -9,7 +9,7 @@ export class TypeSafeApi implements ICredentialType {
 
 	displayName = 'TypeSafe API';
 
-	icon = 'file:taifoon.svg' as const;
+	icon = { light: 'file:taifoon.svg', dark: 'file:taifoon.dark.svg' } as const;
 
 	documentationUrl = 'https://docs.typesafe.ai/introduction/quickstart';
 

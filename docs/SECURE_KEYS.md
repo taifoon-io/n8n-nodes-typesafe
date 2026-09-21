@@ -39,8 +39,6 @@ The `_FILE` suffix works on any n8n setting and exists precisely so secrets stay
 variables, which leak into `docker inspect`, process listings, crash dumps and CI logs. On Kubernetes,
 mount a `Secret` at the same paths.
 
-For the optional Taifoon gateway the type name is `taifoonGatewayApi`
-(`{"taifoonGatewayApi":{"deckUrl":"https://deck.taifoon.dev","principalKey":"…","typesafeKey":"…"}}`).
 
 ## 3 · A vault (n8n Enterprise)
 
@@ -58,9 +56,8 @@ and gain nothing.
 
 ## Never send us a key
 
-You do not need to give Taifoon a TypeSafe key, ever. On the direct connection we are not in the path.
-On the optional gateway connection your key travels per request over TLS in one header, is used for
-that call, and is never stored, logged or echoed. There is deliberately no form, email address or chat
+You do not need to give Taifoon a TypeSafe key, ever. On the direct connection we are not in the path,
+and the free trial uses our key, not yours. There is deliberately no form, email address or chat
 where we accept keys. If anyone asks you for one in our name, it is not us.
 
 If two organisations ever must hand a secret to each other, do it with public-key encryption to the

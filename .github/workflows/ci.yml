@@ -1,0 +1,23 @@
+# Every push and pull request: the same gates n8n's verification applies, before anything can be released.
+name: ci
+on:
+  push: { branches: [main] }
+  pull_request:
+permissions: { contents: read }
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+      - name: Lint with n8n's community-node ruleset (the scanner runs this same ruleset)
+        run: npm run lint
+      - run: npm run build
+      - name: Translator self-test (eleven languages, both directions)
+        run: npx --yes tsx nodes/TaifoonTypeSafe/translate.selftest.mjs
+      - name: No run-time dependencies (required for verified community nodes)
+        run: node -e "const p=require('./package.json'); const d=Object.keys(p.dependencies||{}); if(d.length){console.error('run-time dependencies are not allowed:',d); process.exit(1)}"
+      - name: The node reads no environment and no file system
+        run: "! grep -rnE 'process\\.env|require\\([\"'\\'']fs[\"'\\'']\\)|from [\"'\\'']fs[\"'\\'']|node:fs' nodes credentials"

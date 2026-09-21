@@ -1,15 +1,14 @@
-import type { IDataObject, IExecuteFunctions, IHttpRequestOptions, INodeExecutionData, INodeType, INodeTypeDescription } from 'n8n-workflow';
-import { NodeApiError, NodeOperationError, sleep } from 'n8n-workflow';
+import type { IDataObject, IExecuteFunctions, IHttpRequestOptions, INode, INodeExecutionData, INodeType, INodeTypeDescription, JsonObject } from 'n8n-workflow';
+import { NodeApiError, NodeConnectionTypes, NodeOperationError, sleep } from 'n8n-workflow';
 
 import { decide, translateTask, type AnswerLike, type Lang, type Route } from './translate';
 
 /**
  * TypeSafe for n8n.
  *
- * Two connections:
+ * One service, TypeSafe, reached two ways:
  *   direct    your own TypeSafe key, straight to api.typesafe.ai. No other account, nothing in the path.
- *   taifoon   through the Taifoon gateway: three free trial calls, then a licence plus your own key;
- *             metered per key, and it also fronts open-weights house models.
+ *   trial     three free calls with no key, funded by Taifoon, so a newcomer can see a real answer first.
  *
  * The translation layer is code that ships inside this node, so it behaves identically on both
  * connections and costs nothing: Translate compiles a plain-language task into typed questions,
@@ -20,8 +19,16 @@ interface UiQuestion { id: string; kind: 'noul' | 'choice' | 'score'; text: stri
 
 const split = (s: string | undefined, sep: RegExp) => String(s ?? '').split(sep).map((x) => x.trim()).filter(Boolean);
 
+const REDACT = /(apikey_|tfn_live_|npm_|Bearer\s+)[A-Za-z0-9_.-]+/g;
+function safeError(error: unknown): JsonObject {
+	const e = error as { httpCode?: string | number; message?: string; description?: string; response?: { status?: number; data?: unknown } };
+	const status = e.httpCode ?? e.response?.status ?? 'unknown';
+	const said = typeof e.response?.data === 'object' && e.response?.data !== null ? JSON.stringify(e.response.data).slice(0, 300) : String(e.description ?? e.message ?? '').slice(0, 300);
+	return { message: `Request failed (${status})`, description: said.replace(REDACT, '$1[redacted]'), httpCode: String(status) };
+}
+
 /** TypeSafe asks for exponential backoff on 429 (rate limited) and 529 (overloaded). */
-async function withBackoff<T>(call: () => Promise<T>): Promise<T> {
+async function withBackoff<T>(node: INode, call: () => Promise<T>): Promise<T> {
 	for (let attempt = 0; ; attempt++) {
 		try {
 			return await call();
@@ -31,7 +38,7 @@ async function withBackoff<T>(call: () => Promise<T>): Promise<T> {
 				await sleep(500 * 2 ** attempt);
 				continue;
 			}
-			throw error;
+			throw new NodeApiError(node, safeError(error));
 		}
 	}
 }
@@ -47,38 +54,29 @@ export class TaifoonTypeSafe implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Taifoon TypeSafe',
 		name: 'taifoonTypeSafe',
-		icon: 'file:taifoonTypeSafe.svg',
+		icon: { light: 'file:taifoonTypeSafe.svg', dark: 'file:taifoonTypeSafe.dark.svg' },
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["operation"]}}',
 		description: 'Ask yes/no, pick-one and rate-it questions about any item and route on calibrated answers',
 		defaults: { name: 'TypeSafe' },
-		inputs: ['main'],
-		outputs: ['main', 'main', 'main'],
+		inputs: [NodeConnectionTypes.Main],
+		outputs: [NodeConnectionTypes.Main, NodeConnectionTypes.Main, NodeConnectionTypes.Main],
 		outputNames: ['Pass', 'Fail', 'Review'],
 		usableAsTool: true,
 		credentials: [
 			{ name: 'typeSafeApi', required: true, displayOptions: { show: { operation: ['ask'], connection: ['direct'] } } },
-			{ name: 'taifoonGatewayApi', required: true, displayOptions: { show: { operation: ['ask', 'lanes'], connection: ['taifoon'] } } },
 		],
 		properties: [
 			{ displayName: 'Operation', name: 'operation', type: 'options', noDataExpression: true, default: 'ask',
 				options: [
 					{ name: 'Ask', value: 'ask', action: 'Ask typed questions about an item', description: 'Send an item and a battery of typed questions; route on the answers' },
-					{ name: 'List Lanes', value: 'lanes', action: 'List gateway lanes and spend', description: 'Taifoon gateway only: models, trial calls left, licence and spend' },
 					{ name: 'Translate', value: 'translate', action: 'Translate a task into typed questions', description: 'Compile a plain-language task into questions. Runs inside the node: free, offline, deterministic.' },
 				] },
-			{ displayName: 'Connection', name: 'connection', type: 'options', default: 'direct', displayOptions: { show: { operation: ['ask', 'lanes'] } },
+			{ displayName: 'Connection', name: 'connection', type: 'options', default: 'direct', displayOptions: { show: { operation: ['ask'] } },
 				options: [
 					{ name: 'Direct to TypeSafe', value: 'direct', description: 'Your own TypeSafe key. No other account needed.' },
 					{ name: 'Free Trial (3 Calls, No Key)', value: 'trial', description: 'Three real answers with no account and no key, paid for by Taifoon. Up to 4 questions and 4,000 characters per call.' },
-					{ name: 'Taifoon Gateway', value: 'taifoon', description: 'Three free trial calls, then a licence plus your own key. Metered, and adds open-weights models.' },
-				] },
-			{ displayName: 'Model', name: 'model', type: 'options', default: 'jev', displayOptions: { show: { operation: ['ask'], connection: ['taifoon'] } },
-				options: [
-					{ name: 'Auditor 27B (Open Weights, Slow)', value: 'auditor', description: 'Reasoning model, about a minute per call; yes/no and pick-one only' },
-					{ name: 'Jev (TypeSafe System One)', value: 'jev', description: 'Calibrated probabilities in under a second' },
-					{ name: 'Nemotron 4B (Open Weights)', value: 'algotrada', description: 'Yes/no and pick-one on flat symbolic state. On our benchmark it did not read the state: offered for completeness.' },
 				] },
 			{ displayName: 'Item to Judge', name: 'state', type: 'json', default: '={{ JSON.stringify($json) }}', required: true, displayOptions: { show: { operation: ['ask'] } },
 				description: 'Any JSON or text. The default sends the whole incoming item. Do the arithmetic upstream: the model judges, it does not calculate.' },
@@ -134,13 +132,6 @@ export class TaifoonTypeSafe implements INodeType {
 				}
 
 				const connection = this.getNodeParameter('connection', i) as string;
-				if (operation === 'lanes') {
-					if (connection !== 'taifoon') throw new NodeOperationError(this.getNode(), 'List Lanes needs the Taifoon Gateway connection', { itemIndex: i });
-					const cred = await this.getCredentials('taifoonGatewayApi');
-					const base = String(cred.deckUrl || 'https://deck.taifoon.dev').replace(/\/$/, '');
-					pass.push({ json: (await this.helpers.httpRequestWithAuthentication.call(this, 'taifoonGatewayApi', { method: 'GET', url: `${base}/api/typed`, json: true })) as IDataObject, pairedItem: { item: i } });
-					continue;
-				}
 
 				// ── ask ──
 				const stateRaw = this.getNodeParameter('state', i) as string | IDataObject;
@@ -166,7 +157,7 @@ export class TaifoonTypeSafe implements INodeType {
 					}
 					const req: IHttpRequestOptions = { method: 'POST', url: `${String(cred.baseUrl || 'https://api.typesafe.ai').replace(/\/$/, '')}/v1/systemone`, body: { model: 'jev-latest', state, questions }, json: true, timeout: 60000 };
 					const started = Date.now();
-					const res = (await withBackoff(() => this.helpers.httpRequestWithAuthentication.call(this, 'typeSafeApi', req))) as { model?: string; answers?: Record<string, IDataObject>; usage?: IDataObject };
+					const res = (await withBackoff(this.getNode(), () => this.helpers.httpRequestWithAuthentication.call(this, 'typeSafeApi', req))) as { model?: string; answers?: Record<string, IDataObject>; usage?: IDataObject };
 					answers = qs.map((q) => {
 						const a = (res.answers ?? {})[q.id];
 						if (!a) return { id: q.id, kind: q.kind, schema_ok: false, value: null };
@@ -181,14 +172,7 @@ export class TaifoonTypeSafe implements INodeType {
 					answers = (res.answers as unknown as AnswerLike[]) ?? [];
 					meta = { model: res.model, provider: 'typesafe', connection, latency_ms: res.latency_ms, usage: res.usage, trial: res.trial, next: res.next };
 				} else {
-					const cred = await this.getCredentials('taifoonGatewayApi');
-					const base = String(cred.deckUrl || 'https://deck.taifoon.dev').replace(/\/$/, '');
-					const model = this.getNodeParameter('model', i) as string;
-					const body = { model, state, questions: qs.map((q) => ({ id: q.id, kind: q.kind, text: q.text,
-						...(q.kind === 'choice' ? { options: split(q.options, /\s*,\s*/) } : {}), ...(q.kind === 'score' ? { levels: split(q.levels, /\s*\|\s*/) } : {}) })) };
-					const res = (await withBackoff(() => this.helpers.httpRequestWithAuthentication.call(this, 'taifoonGatewayApi', { method: 'POST', url: `${base}/api/typed`, body, json: true, timeout: 120000 }))) as IDataObject;
-					answers = (res.answers as unknown as AnswerLike[]) ?? [];
-					meta = { model: res.model, provider: res.provider ?? 'taifoon', connection, latency_ms: res.latency_ms, usage: res.usage ?? res.tokens, funding: res.funding, cost_usd: res.cost_usd };
+					throw new NodeOperationError(this.getNode(), `Unknown connection: ${connection}`, { itemIndex: i });
 				}
 
 				const schemaOk = answers.every((a) => a.schema_ok !== false);
@@ -204,14 +188,9 @@ export class TaifoonTypeSafe implements INodeType {
 				(routed?.branch === 'fail' ? fail : routed?.branch === 'review' ? review : pass).push(out);
 			} catch (error) {
 				if (this.continueOnFail()) { review.push({ json: { error: String((error as Error).message ?? 'request failed').replace(/(apikey_|tfn_live_|Bearer\s+)[A-Za-z0-9_.-]+/g, '$1[redacted]'), branch: 'review' }, pairedItem: { item: i } }); continue; }
-				if (error instanceof NodeOperationError) throw error;
-				// NEVER hand n8n the raw HTTP error: it carries the request config, headers included, and n8n stores
-				// failed executions. A key in an Authorization or x-typesafe-key header would be written to disk.
-				// Pass on only what a user needs to act: the status, and the service's own words.
-				const e = error as { httpCode?: string | number; message?: string; description?: string; response?: { status?: number; data?: unknown } };
-				const status = e.httpCode ?? e.response?.status ?? 'unknown';
-				const said = typeof e.response?.data === 'object' && e.response?.data !== null ? JSON.stringify(e.response.data).slice(0, 300) : String(e.description ?? '').slice(0, 300);
-				throw new NodeApiError(this.getNode(), { message: `Request failed (${status})`, description: said.replace(/(apikey_|tfn_live_|Bearer\s+)[A-Za-z0-9_.-]+/g, '$1[redacted]') }, { itemIndex: i, httpCode: String(status) });
+				if (error instanceof NodeOperationError) throw new NodeOperationError(this.getNode(), error.message, { itemIndex: i, description: error.description ?? undefined });
+				// never the raw HTTP error: it carries request headers, and n8n stores failed executions
+				throw new NodeApiError(this.getNode(), safeError(error), { itemIndex: i });
 			}
 		}
 		return [pass, fail, review];
