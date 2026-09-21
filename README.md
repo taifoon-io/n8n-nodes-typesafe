@@ -20,6 +20,32 @@ item ──► TypeSafe ──► Pass      confident, and it cleared your thres
                  └──► Review    unsure, or the answer did not validate: send this to a person
 ```
 
+## The idea: three systems, each doing the one thing it is good at
+
+```
+   n8n                      Taifoon                         TypeSafe
+   the workflow             the coordination layer          the judge
+   ─────────────            ──────────────────────          ─────────
+   gathers the item    ──►  turns your words into      ──►  answers each question
+   runs the branches        typed questions                 with a probability
+        ▲                   turns the answers back    ◄──
+        └────────────────   into Pass / Fail / Review
+```
+
+- **n8n** is where your process already lives: the triggers, the data, the people who get notified.
+  It is good at moving things and bad at judgment.
+- **TypeSafe** is a model that only judges. It cannot write an essay, which is the point: it returns
+  a number you can threshold, quickly and cheaply, instead of prose you have to interpret.
+- **Taifoon's part is the layer between them**, and it is plain code that ships inside this node. Going
+  in, it compiles what you mean ("is this a refund?") into the three question types the model
+  understands. Coming out, it compiles the model's probabilities into the only three things a workflow
+  can act on: go ahead, do not, or ask a human. Every threshold in that step is yours and sits on the
+  canvas where you can see it.
+
+Why three outputs and not two: a yes/no forces a confident answer even when the model is guessing, and
+that is how automations go wrong silently. **Review** is the honest third option. It is where the
+low-confidence cases and the malformed answers go, so a person sees exactly the items that need one.
+
 ## Who this is for
 
 - **Support and ops teams** routing tickets, emails and alerts without maintaining a wall of IF nodes.
@@ -48,7 +74,11 @@ so ten questions cost about the same as one.
 
 In self-hosted n8n: **Settings → Community Nodes → Install**, then enter `@taifoon/n8n-nodes-typesafe`.
 
-Create a **TypeSafe API** credential and paste your key. The test button makes one tiny real call, so
+**No key yet?** Pick the **Free Trial** connection: three real answers with no account and no key, on us
+(up to 4 questions and 4,000 characters per call). It exists so you can see a real result before signing
+up anywhere.
+
+When you are ready, create a **TypeSafe API** credential and paste your key. The test button makes one tiny real call, so
 you find out immediately whether the key works. Running n8n for a team? You can provision the key from a
 secrets file so nobody ever sees it: [Supplying keys securely](docs/SECURE_KEYS.md).
 
@@ -77,8 +107,16 @@ The **Translate** operation turns a sentence into questions:
 becomes a yes/no, a pick-one with exactly those four options, and a five-level rating. It runs inside
 the node: no network call, no key, no cost, and the same sentence always gives the same result.
 
-It understands **English, Spanish, German, French, Portuguese, Italian, Polish and Dutch**, detects the
-language per sentence, and you can mix them in one task. Anything else still works as a yes/no.
+It understands **English, Spanish, German, French, Portuguese, Italian, Polish, Dutch, Russian, Japanese
+and Arabic**, detects the language per sentence, and you can mix them in one task. Anything else still
+works as a yes/no.
+
+**Your language is not here? Please add it.** A language is one small word pack in
+[`nodes/TaifoonTypeSafe/translate.ts`](nodes/TaifoonTypeSafe/translate.ts): the verbs that mean "pick
+one", the words that mean "rate it", how options are introduced and separated, how a scale is written,
+and a four-level default rubric. No logic changes. Add the pack, add one test sentence to the self-test,
+open a pull request. Native speakers catch what we cannot: we would especially welcome Chinese, Korean,
+Hindi, Turkish, Ukrainian, Swedish, Hebrew and Indonesian, and corrections to the eleven we ship.
 
 It is deliberately literal. It will not invent categories you did not name: *"classify this ticket"*
 with no list comes back flagged `needs_input`. It suggests thresholds but never applies them for you,
