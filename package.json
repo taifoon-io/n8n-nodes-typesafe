@@ -1,6 +1,6 @@
 {
   "name": "@taifoon/n8n-nodes-typesafe",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "TypeSafe for n8n: ask Jev (a System One model) yes/no, pick-one and rate-it questions about any workflow item and route on calibrated answers. Works directly with your own TypeSafe key; includes a task-to-questions translator and Pass / Fail / Review outputs.",
   "keywords": [
     "n8n-community-node-package",

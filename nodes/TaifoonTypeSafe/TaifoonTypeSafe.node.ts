@@ -15,9 +15,10 @@ import { decide, reply, translateTask, type AnswerLike, type Lang, type Route } 
  * and Routing turns answers into the Pass / Fail / Review outputs. No dependency, no model call.
  */
 
-interface UiQuestion { id: string; kind: 'noul' | 'choice' | 'score'; text: string; options?: string; levels?: string; /** set by Translate: the clause as the person wrote it, echoed by the reply */ source?: string }
+interface UiQuestion { id: string; kind: 'noul' | 'choice' | 'score'; text: string; options?: string | string[] | Record<string, string | null>; levels?: string | string[]; yesMeans?: string; noMeans?: string; /** set by Translate: the clause as the person wrote it, echoed by the reply */ source?: string }
 
-const split = (s: string | undefined, sep: RegExp) => String(s ?? '').split(sep).map((x) => x.trim()).filter(Boolean);
+/** Options and levels arrive as the UI's delimited text, or as a list when someone pastes natural JSON. */
+const split = (s: string | string[] | undefined, sep: RegExp) => (Array.isArray(s) ? s.map(String) : String(s ?? '').split(sep)).map((x) => x.trim()).filter(Boolean);
 
 const REDACT = /(apikey_|tfn_live_|npm_|Bearer\s+)[A-Za-z0-9_.-]+/g;
 function safeError(error: unknown): JsonObject {
@@ -50,6 +51,18 @@ function retryAfterMs(error: unknown): number | undefined {
 	const secs = Number(raw);
 	const ms = Number.isFinite(secs) ? secs * 1000 : Date.parse(String(raw)) - Date.now();
 	return Number.isFinite(ms) && ms >= 0 ? Math.min(ms, 30000) : undefined;
+}
+
+/**
+ * A pick-one's options, each with an optional description (TypeSafe sends both to the model, and a description is what
+ * separates two options that sound alike). Accepts the form's text, a pasted list, or a pasted {name: description} map.
+ * Text: "billing, technical" or "billing = payments and refunds; technical = bugs and outages". Entries are separated by
+ * new lines or semicolons when there are any (so a description may contain a comma), otherwise by commas.
+ */
+function parseOptions(raw: UiQuestion['options']): Array<[string, string | null]> {
+	if (raw && typeof raw === 'object' && !Array.isArray(raw)) return Object.entries(raw).map(([k, v]) => [k.trim(), v === null || v === undefined || String(v).trim() === '' ? null : String(v).trim()] as [string, string | null]).filter(([k]) => k);
+	const entries = Array.isArray(raw) ? raw.map(String) : String(raw ?? '').split(/[\n;]/.test(String(raw ?? '')) ? /\s*[\n;]\s*/ : /\s*,\s*/);
+	return entries.map((e) => { const at = e.indexOf('='); return (at < 0 ? [e.trim(), null] : [e.slice(0, at).trim(), e.slice(at + 1).trim() || null]) as [string, string | null]; }).filter(([k]) => k);
 }
 
 /** TypeSafe asks for exponential backoff on 429 (rate limited) and 529 (overloaded). */
@@ -109,11 +122,13 @@ export class TaifoonTypeSafe implements INodeType {
 				description: 'Ask every question that might matter in one call: they are answered in parallel and in isolation, so ten cost about what one does',
 				options: [{ name: 'question', displayName: 'Question', values: [
 					{ displayName: 'ID', name: 'id', type: 'string', default: '', placeholder: 'is_refund', description: 'Lower-case name the answer is returned under' },
-					{ displayName: 'Levels', name: 'levels', type: 'string', default: '', placeholder: 'None | Low | Medium | High', displayOptions: { show: { kind: ['score'] } }, description: 'Pipe-separated rubric, lowest first, 2 to 10 levels' },
-					{ displayName: 'Options', name: 'options', type: 'string', default: '', placeholder: 'billing, technical, sales, abuse', displayOptions: { show: { kind: ['choice'] } }, description: 'Comma-separated, 2 to 50' },
+					{ displayName: 'Levels', name: 'levels', type: 'string', default: '', placeholder: 'None | Low | Medium | High', displayOptions: { show: { kind: ['score'] } }, description: 'Pipe-separated rubric, lowest first, 2 to 10 levels. Each level is a description: write what that level looks like. The answer is a zero-based position on this list and can land between levels.' },
+					{ displayName: 'No Means', name: 'noMeans', type: 'string', default: '', placeholder: 'No urgency expressed', displayOptions: { show: { kind: ['noul'] } }, description: 'Optional. What a "no" means, in your words. Helps when the question alone could be read two ways.' },
+					{ displayName: 'Options', name: 'options', type: 'string', default: '', placeholder: 'billing = payments and refunds; technical = bugs and outages; sales', displayOptions: { show: { kind: ['choice'] } }, description: 'The options, 2 to 255, separated by commas. To describe an option write "name = description"; separate the entries with semicolons or new lines if a description contains a comma. Descriptions are sent to the model and are what separates options that sound alike.' },
 					{ displayName: 'Question Text', name: 'text', type: 'string', default: '', description: 'One atomic question. Anything that weighs several factors should be several questions.' },
 					{ displayName: 'Type', name: 'kind', type: 'options', default: 'noul', options: [
 						{ name: 'Choice (Pick One of a Set)', value: 'choice' }, { name: 'Noul (Yes/No as a Probability)', value: 'noul' }, { name: 'Score (Level on a Rubric)', value: 'score' }] },
+					{ displayName: 'Yes Means', name: 'yesMeans', type: 'string', default: '', placeholder: 'Explicitly time-sensitive', displayOptions: { show: { kind: ['noul'] } }, description: 'Optional. What a "yes" means, in your words.' },
 				] }] },
 			{ displayName: 'Questions From Translate (JSON)', name: 'questionsJson', type: 'json', default: '[]', displayOptions: { show: { operation: ['ask'] } },
 				description: 'Optional. The "questions" array produced by the Translate operation, for example {{ $JSON.ask.questions }}. Added to the questions above.' },
@@ -152,6 +167,7 @@ export class TaifoonTypeSafe implements INodeType {
 					const runnable = questions.filter((q) => !q.needs_input);
 					pass.push({ pairedItem: { item: i }, json: {
 						ready: questions.length > 0 && runnable.length === questions.length, deterministic: true, languages: langs, questions, dropped, notes,
+						warnings: questions.filter((q) => q.warning).map((q) => ({ id: q.id, warning: q.warning })),
 						ask: { questions: runnable.map((q) => ({ id: q.id, kind: q.kind, text: q.text, source: q.source, ...(q.options ? { options: q.options.join(', ') } : {}), ...(q.levels ? { levels: q.levels.join(' | ') } : {}) })),
 							// routing is EMPTY on purpose. The branch is the AND of every routed question, so auto-filling
 							// thresholds made a calm refund ticket "fail" for not being urgent. Route only what you mean to gate on.
@@ -181,9 +197,10 @@ export class TaifoonTypeSafe implements INodeType {
 					const cred = await this.getCredentials('taifoonTypeSafeApi');
 					const questions: Record<string, IDataObject> = {};
 					for (const q of qs) {
-						questions[q.id] = q.kind === 'choice' ? { type: 'choice', instructions: q.text, criteria: Object.fromEntries(split(q.options, /\s*,\s*/).map((o) => [o, o])) }
+						const means = { ...(q.yesMeans?.trim() ? { true: q.yesMeans.trim() } : {}), ...(q.noMeans?.trim() ? { false: q.noMeans.trim() } : {}) };
+						questions[q.id] = q.kind === 'choice' ? { type: 'choice', instructions: q.text, criteria: Object.fromEntries(parseOptions(q.options).map(([o, d]) => [o, d ?? o])) }
 							: q.kind === 'score' ? { type: 'score', instructions: q.text, criteria: split(q.levels, /\s*\|\s*/) }
-							: { type: 'noul', instructions: q.text };
+							: { type: 'noul', instructions: q.text, ...(Object.keys(means).length ? { criteria: means } : {}) };
 					}
 					const base = String(cred.baseUrl || 'https://api.typesafe.ai').replace(/\/$/, '');
 					// a key is only ever sent over TLS: a typo or a pasted http:// address must not leak it
@@ -201,7 +218,8 @@ export class TaifoonTypeSafe implements INodeType {
 					meta = { model: res.model ?? 'jev-latest', provider: 'typesafe', connection, latency_ms: Date.now() - started, usage: res.usage ?? {} };
 				} else if (connection === 'trial') {
 					const res = await askTrial(this, { state: state as IDataObject, questions: qs.map((q) => ({ id: q.id, kind: q.kind, text: q.text,
-						...(q.kind === 'choice' ? { options: split(q.options, /\s*,\s*/) } : {}), ...(q.kind === 'score' ? { levels: split(q.levels, /\s*\|\s*/) } : {}) })) });
+						...(q.kind === 'choice' ? { options: Object.fromEntries(parseOptions(q.options)) } : {}), ...(q.kind === 'score' ? { levels: split(q.levels, /\s*\|\s*/) } : {}),
+						...(q.kind === 'noul' && q.yesMeans?.trim() ? { yes_means: q.yesMeans.trim() } : {}), ...(q.kind === 'noul' && q.noMeans?.trim() ? { no_means: q.noMeans.trim() } : {}) })) });
 					answers = (res.answers as unknown as AnswerLike[]) ?? [];
 					meta = { model: res.model, provider: 'typesafe', connection, latency_ms: res.latency_ms, usage: res.usage, trial: res.trial, next: res.next };
 				} else {

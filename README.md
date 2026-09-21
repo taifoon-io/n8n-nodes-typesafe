@@ -70,6 +70,13 @@ It is not for writing text, summarising, or reasoning about code. We measured th
 | **Pick one** ("Choice") | the option, a probability for every option, and a `confidence` | a Switch that knows when it is guessing |
 | **Rate it** ("Score") | a level on a rubric you write, and a `confidence` | a ranking you can threshold |
 
+Two things make the answers sharper, and both are optional:
+
+- **Describe the options.** Write `billing = payments and refunds; technical = bugs and outages; other = fits none`.
+  The descriptions go to the model and are what separates options that sound alike. Add an `other`: a message
+  that fits nowhere is then answered *other* with confidence, instead of being forced into a team.
+- **Say what yes and no mean.** A yes/no question has *Yes Means* and *No Means* fields for where the line is.
+
 Ask all the questions that might matter in the same node. They are answered at once and independently,
 so ten questions cost about the same as one.
 
@@ -126,6 +133,11 @@ one", the words that mean "rate it", how options are introduced and separated, h
 and a four-level default rubric. No logic changes. Add the pack, add one test sentence to the self-test,
 open a pull request. Native speakers catch what we cannot: we would especially welcome Chinese, Korean,
 Hindi, Turkish, Ukrainian, Swedish, Hebrew and Indonesian, and corrections to the eleven we ship.
+
+It splits a sentence that holds several jobs (*check if it is a refund and rate the urgency*), keeps the levels you
+name (*rate the tone as polite, neutral or rude*) and reads *from 5 to 1* as the 1 to 5 scale. When it cannot do what
+you wrote it says so in `warnings` rather than substituting quietly: a *0 to 10* scale has eleven steps and a rating
+takes at most ten, and *is the customer new or returning?* asked as a yes/no answers whether EITHER holds, not which.
 
 It is deliberately literal. It will not invent categories you did not name: *"classify this ticket"*
 with no list comes back flagged `needs_input`. It suggests thresholds but never applies them for you,
@@ -246,6 +258,10 @@ questions you actually want to gate on. If you route `urgency` as well, a perfec
 | Yes / no | `gte`, `lte` on `p` | pass or fail |
 | Pick one | `minConfidence`, and `in` for the options you accept | below the confidence → **Review** |
 | Rate it | `min`, `max` on the level, and optionally `minConfidence` | pass or fail; below the confidence → **Review** |
+
+A mistake in Routing never reads as a pass. A rule that names a question you did not ask (a typo, a renamed ID), a
+yes/no rule with no threshold, or a confidence bar on an answer that carries no confidence all send the item to
+**Review**, with the reason in `decisions`.
 
 Two details: a rating is a **zero-based level number** (0 is your first level; every answer includes a
 `legend`), and an answer that does not validate always goes to Review. Nothing fails open.
