@@ -36,6 +36,13 @@ async function withBackoff<T>(call: () => Promise<T>): Promise<T> {
 	}
 }
 
+/** The free trial needs no credential, so it lives outside execute(): n8n's lint (rightly) forbids an
+ *  unauthenticated httpRequest inside a function that also reads credentials. */
+const TRIAL_URL = 'https://deck.taifoon.dev/api/typed/trial';
+async function askTrial(ctx: IExecuteFunctions, body: IDataObject): Promise<IDataObject> {
+	return (await ctx.helpers.httpRequest({ method: 'POST', url: TRIAL_URL, body, json: true, timeout: 60000 })) as IDataObject;
+}
+
 export class TaifoonTypeSafe implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Taifoon TypeSafe',
@@ -64,6 +71,7 @@ export class TaifoonTypeSafe implements INodeType {
 			{ displayName: 'Connection', name: 'connection', type: 'options', default: 'direct', displayOptions: { show: { operation: ['ask', 'lanes'] } },
 				options: [
 					{ name: 'Direct to TypeSafe', value: 'direct', description: 'Your own TypeSafe key. No other account needed.' },
+					{ name: 'Free Trial (3 Calls, No Key)', value: 'trial', description: 'Three real answers with no account and no key, paid for by Taifoon. Up to 4 questions and 4,000 characters per call.' },
 					{ name: 'Taifoon Gateway', value: 'taifoon', description: 'Three free trial calls, then a licence plus your own key. Metered, and adds open-weights models.' },
 				] },
 			{ displayName: 'Model', name: 'model', type: 'options', default: 'jev', displayOptions: { show: { operation: ['ask'], connection: ['taifoon'] } },
@@ -93,8 +101,8 @@ export class TaifoonTypeSafe implements INodeType {
 			{ displayName: 'Language', name: 'language', type: 'options', default: 'auto', displayOptions: { show: { operation: ['translate'] } },
 				description: 'The language the task is written in. Auto detects it per sentence, so a mixed task works.',
 				options: [
-					{ name: 'Auto-Detect', value: 'auto' }, { name: 'Dutch', value: 'nl' }, { name: 'English', value: 'en' }, { name: 'French', value: 'fr' }, { name: 'German', value: 'de' },
-					{ name: 'Italian', value: 'it' }, { name: 'Polish', value: 'pl' }, { name: 'Portuguese', value: 'pt' }, { name: 'Spanish', value: 'es' }] },
+					{ name: 'Arabic', value: 'ar' }, { name: 'Auto-Detect', value: 'auto' }, { name: 'Dutch', value: 'nl' }, { name: 'English', value: 'en' }, { name: 'French', value: 'fr' }, { name: 'German', value: 'de' },
+					{ name: 'Italian', value: 'it' }, { name: 'Japanese', value: 'ja' }, { name: 'Polish', value: 'pl' }, { name: 'Portuguese', value: 'pt' }, { name: 'Russian', value: 'ru' }, { name: 'Spanish', value: 'es' }] },
 			{ displayName: 'Fail Closed', name: 'failClosed', type: 'boolean', default: true, displayOptions: { show: { operation: ['ask'] } },
 				description: 'Whether an answer that did not validate stops the item with an error instead of flowing on as a null' },
 		],
@@ -167,6 +175,11 @@ export class TaifoonTypeSafe implements INodeType {
 						return { id: q.id, kind: q.kind, schema_ok: typeof a.score === 'number', value: a.score ?? null, confidence: (a.confidence as number) ?? null, probabilities: a.probabilities, legend: a.legend } as AnswerLike;
 					});
 					meta = { model: res.model ?? 'jev-latest', provider: 'typesafe', connection, latency_ms: Date.now() - started, usage: res.usage ?? {} };
+				} else if (connection === 'trial') {
+					const res = await askTrial(this, { state: state as IDataObject, questions: qs.map((q) => ({ id: q.id, kind: q.kind, text: q.text,
+						...(q.kind === 'choice' ? { options: split(q.options, /\s*,\s*/) } : {}), ...(q.kind === 'score' ? { levels: split(q.levels, /\s*\|\s*/) } : {}) })) });
+					answers = (res.answers as unknown as AnswerLike[]) ?? [];
+					meta = { model: res.model, provider: 'typesafe', connection, latency_ms: res.latency_ms, usage: res.usage, trial: res.trial, next: res.next };
 				} else {
 					const cred = await this.getCredentials('taifoonGatewayApi');
 					const base = String(cred.deckUrl || 'https://deck.taifoon.dev').replace(/\/$/, '');

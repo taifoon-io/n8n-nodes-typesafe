@@ -47,8 +47,8 @@ export interface Route {
  * yes/no, and a default rubric. Adding a language is adding a pack, never touching the logic.
  * Matching is Unicode-aware: JavaScript's \b treats "é" and "ł" as non-letters, so boundaries are
  * written as "no letter before / no letter after". */
-export type Lang = "en" | "es" | "de" | "fr" | "pt" | "it" | "pl" | "nl";
-interface Pack { choice: string; score: string; intro: string; or: string; and: string; from: string; to: string; outOf: string; lead: string; rubric: [string, string, string, string]; stop: string }
+export type Lang = "en" | "es" | "de" | "fr" | "pt" | "it" | "pl" | "nl" | "ru" | "ja" | "ar";
+interface Pack { /** true for scripts without spaces between words (Japanese) or with attached particles (Arabic): match anywhere, not on word boundaries */ loose?: boolean; /** a script range that identifies the language outright */ script?: RegExp; choice: string; score: string; intro: string; or: string; and: string; from: string; to: string; outOf: string; lead: string; rubric: [string, string, string, string]; stop: string }
 const PACKS: Record<Lang, Pack> = {
   en: { choice: "classif(?:y|ication)|categori[sz]e|which (?:of|one|category|type|kind)|route|pick|choose|select|label|tag|assign|triage|sort|bucket|decide between|one of|either|(?:decide|determine|identify|work out|figure out) which|which \\p{L}+(?: \\p{L}+)? (?:to|should|is|are|would|best)",
         score: "rate|rating|score|rank|grade|how (?:much|severe|serious|likely|good|bad|urgent|confident|relevant|well|strong|risky|important|complete|angry|satisfied|positive|negative)|severity|urgency|priority|quality|on a scale|out of \\d+",
@@ -82,19 +82,36 @@ const PACKS: Record<Lang, Pack> = {
         score: "beoordeel|waardeer|hoe (?:dringend|ernstig|waarschijnlijk|goed|slecht|belangrijk|relevant)|urgentie|ernst|prioriteit|kwaliteit|op een schaal|van \\d+ tot \\d+",
         intro: "in|als|tussen|onder|een van|opties|categorieën|labels?|typen", or: "of", and: "en", from: "van", to: "tot|t/m", outOf: "op",
         lead: "(?:alsjeblieft )?(?:controleer|bepaal|stel vast|detecteer|bevestig|geef aan|vertel me) (?:of|dat)", rubric: ["Geen", "Laag", "Gemiddeld", "Hoog"], stop: "de het een is zijn van en of dat als te in op voor met aan er dit die deze niet wat hoe" },
+  ru: { script: /[Ѐ-ӿ]/u, choice: "классифицируй(?:те)?|категоризируй(?:те)?|отнеси(?:те)?|выбери(?:те)?|определи(?:те)?,? (?:какой|какая|какое|к какой)|назначь(?:те)?|пометь(?:те)?|один из|одну из",
+        score: "оцени(?:те)?|оценка|насколько|срочность|серьёзность|серьезность|приоритет|качество|по шкале|из \\d+",
+        intro: "на|как|между|среди|один из|одну из|к одной из|варианты|категории|метки|типы", or: "или|либо", and: "и", from: "от", to: "до", outOf: "из",
+        lead: "(?:пожалуйста,? )?(?:проверь(?:те)?|определи(?:те)?|выясни(?:те)?|установи(?:те)?|подтверди(?:те)?|скажи(?:те)?),? (?:ли|что)?\\s*", rubric: ["Нет", "Низкая", "Средняя", "Высокая"], stop: "и в на с не что как это по к у за от для или ли же бы" },
+  ja: { loose: true, script: /[぀-ヿ]/u, choice: "分類|振り分け|選択|選んで|割り当て|どれ|どの(?:チーム|カテゴリ|種類)|いずれか",
+        score: "評価|採点|どの程度|どれくらい|緊急度|重大度|優先度|品質|段階で|点満点",
+        intro: "に分類|として|から|のうち|の中から|カテゴリ[:：]|選択肢[:：]", or: "または|もしくは|か", and: "と|および", from: "", to: "から|〜|~", outOf: "点満点",
+        lead: "", rubric: ["なし", "低", "中", "高"], stop: "" },
+  ar: { loose: true, script: /[؀-ۿ]/u, choice: "صن[ّ]?ف|اختر|اختار|حد[ّ]?د (?:أي|الفريق|الفئة)|عي[ّ]?ن|أي من|واحد من|إحدى",
+        score: "قي[ّ]?م|قدّر|ما مدى|إلى أي مدى|الإلحاح|الخطورة|الأولوية|الجودة|على مقياس|من \\d+ إلى \\d+",
+        intro: "إلى|الى|بين|من بين|واحد من|إحدى|الخيارات|الفئات|الأنواع", or: "أو|او", and: "و", from: "من", to: "إلى|الى|حتى", outOf: "من",
+        lead: "(?:من فضلك )?(?:تحقق|تأكد|حد[ّ]?د|اكتشف|أك[ّ]?د)\\s+(?:مما إذا كان|مما إذا كانت|إذا كان|إذا كانت|من أن|أن)?\\s*", rubric: ["لا شيء", "منخفضة", "متوسطة", "عالية"], stop: "" },
 };
 export const LANGS = Object.keys(PACKS) as Lang[];
 const NB = "(?<![\\p{L}\\p{N}])";            // no letter or digit before
 const NA = "(?![\\p{L}\\p{N}])";             // no letter or digit after
-const word = (alt: string, flags = "iu") => new RegExp(`${NB}(?:${alt})${NA}`, flags);
-const RX = Object.fromEntries(LANGS.map((l) => [l, { choice: word(PACKS[l].choice), score: word(PACKS[l].score), lead: new RegExp(`^\\s*(?:${PACKS[l].lead})\\s+`, "iu") }])) as Record<Lang, { choice: RegExp; score: RegExp; lead: RegExp }>;
+const word = (alt: string, loose = false, flags = "iu") => new RegExp(loose ? `(?:${alt})` : `${NB}(?:${alt})${NA}`, flags);
+const nb = (l: Lang) => (PACKS[l].loose ? "" : NB);
+const na = (l: Lang) => (PACKS[l].loose ? "" : NA);
+const RX = Object.fromEntries(LANGS.map((l) => [l, { choice: word(PACKS[l].choice, PACKS[l].loose), score: word(PACKS[l].score, PACKS[l].loose), lead: PACKS[l].lead ? new RegExp(`^\\s*(?:${PACKS[l].lead})\\s*`, "iu") : /^(?!)/u }])) as Record<Lang, { choice: RegExp; score: RegExp; lead: RegExp }>;
 
 /** which language's words does this clause use? English wins a tie: it is the fallback, not a guess. */
 export function detectLang(clause: string, hint?: Lang): Lang {
   if (hint && PACKS[hint]) return hint;
+  // a script settles it outright: kana means Japanese, the Arabic block Arabic, Cyrillic the Russian pack
+  for (const l of LANGS) if (PACKS[l].script?.test(clause)) return l;
   let best: Lang = "en"; let bestN = 0;
   const lower = ` ${clause.toLowerCase()} `;
   for (const l of LANGS) {
+    if (PACKS[l].script) continue;
     const stops = new Set(PACKS[l].stop.split(" "));
     let n = 0;
     for (const w of lower.split(/[^\p{L}']+/u)) if (w && stops.has(w)) n++;
@@ -109,11 +126,13 @@ export function clauses(task: string): string[] {
   const t = task.replace(/\r/g, "").trim();
   // list markers count ONLY at the start of a line. Measured 2026-09-20: matching them after any
   // space turned "from 1 to 5. Decide" into a list item "5." and cut the scale out of the clause.
-  const lines = t.split(/\n+|;\s+|。|；/u).map((s) => s.replace(/^\s*(?:\d+[.)]|[-*•–])\s+/u, "").trim()).filter(Boolean);
+  const lines = t.split(/\n+|;\s+|。|；|؛|(?<=[؟])\s+/u).map((s) => s.replace(/^\s*(?:\d+[.)]|[-*•–])\s+/u, "").trim()).filter(Boolean);
   const out: string[] = [];
   for (const line of lines) {
     // a sentence boundary needs a capital after it, so a decimal or "z.B." never splits; ¿ and ¡ open Spanish sentences
-    for (const s of line.split(/(?<=[.?!])\s+(?=[\p{Lu}¿¡])/u)) {
+    // …or a letter from a CASELESS script (Arabic, Hebrew, kana, hanzi: Unicode "Lo"). Arabic has no capitals, so
+    // "a capital follows" kept three Arabic sentences fused into one clause.
+    for (const s of line.split(/(?<=[.?!؟])\s+(?=[\p{Lu}\p{Lo}¿¡])/u)) {
       const c = s.trim().replace(/[.]+$/, "");
       if (c.length >= 4) out.push(c);
     }
@@ -124,18 +143,21 @@ export function clauses(task: string): string[] {
 /** options named by the task itself: after a colon or an introducing word, split on separators and "or"/"and" */
 export function extractOptions(clause: string, lang: Lang = "en"): string[] {
   const p = PACKS[lang];
-  const m = clause.match(new RegExp(`(?::|${NB}(?:${p.intro})${NA}[:\\s])\\s*(.+)$`, "iu"));
+  const colon = clause.match(/[:：]\s*(.+)$/u);
+  const m = colon ?? clause.match(new RegExp(p.loose ? `(?:[:：]|(?:${p.intro}))[:：\\s]*(.+)$` : `(?::|${NB}(?:${p.intro})${NA}[:\\s])\\s*(.+)$`, "iu"));
   if (!m) return [];
   const tail = m[1].replace(/\s*\(.*?\)\s*/g, " ").replace(/[.?!]+$/, "");
-  const parts = tail.split(new RegExp(`\\s*(?:,|/|\\||、|${NB}(?:${p.or}|${p.and})${NA})\\s*`, "iu"))
-    .map((s) => s.trim().replace(/^["'`«»„“”]+|["'`«»„“”]+$/gu, "")).filter((s) => s.length > 0 && s.length <= 40);
+  const parts = tail.split(new RegExp(p.loose ? `\\s*(?:,|،|/|\\||、|\\s(?:${p.or})\\s|(?:または|もしくは)|\\sو(?=\\p{L}))\\s*` : `\\s*(?:,|/|\\||、|${NB}(?:${p.or}|${p.and})${NA})\\s*`, "iu"))
+    .map((s) => s.trim().replace(/^["'`«»„“”「」]+|["'`«»„“”「」]+$/gu, "").replace(/(?:に分類|のいずれか|から選|です|してください|する)[^、]*$/u, "").trim()).filter((s) => s.length > 0 && s.length <= 40);
   const uniq = [...new Set(parts)];
   return uniq.length >= 2 ? uniq.slice(0, 50) : [];
 }
 
 function levelsFor(clause: string, lang: Lang): { levels: string[]; why: string; matched: string | null } {
   const p = PACKS[lang];
-  const r = clause.match(new RegExp(`${NB}(?:(?:${p.from})\\s+)?(\\d{1,2})\\s*(?:-|–|—|${NB}(?:${p.to})${NA})\\s*(\\d{1,2})${NA}|${NB}(?:${p.outOf})\\s+(\\d{1,2})${NA}`, "iu"));
+  const r = clause.match(p.loose
+    ? new RegExp(`(\\d{1,2})\\s*(?:-|–|—|〜|~|${p.to})\\s*(\\d{1,2})|(\\d{1,2})\\s*(?:${p.outOf})`, "iu")
+    : new RegExp(`${NB}(?:(?:${p.from})\\s+)?(\\d{1,2})\\s*(?:-|–|—|${NB}(?:${p.to})${NA})\\s*(\\d{1,2})${NA}|${NB}(?:${p.outOf})\\s+(\\d{1,2})${NA}`, "iu"));
   if (r) {
     const lo = r[3] ? 1 : Number(r[1]);
     const hi = r[3] ? Number(r[3]) : Number(r[2]);
@@ -152,7 +174,7 @@ function slug(text: string, taken: Set<string>, lang: Lang): string {
   // ids are ASCII: fold diacritics (ł and ß do not decompose, so they are mapped by hand)
   const folded = text.toLowerCase().replace(/ł/g, "l").replace(/ß/g, "ss").replace(/ø/g, "o").replace(/æ/g, "ae").normalize("NFD").replace(/\p{M}+/gu, "");
   const words = folded.replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w && !stops.has(w)).slice(0, 4);
-  let base = (words.join("_") || "q").replace(/^[^a-z]+/, "").slice(0, 36) || "q";
+  let base = (words.join("_") || `q${taken.size + 1}`).replace(/^[^a-z]+/, "").slice(0, 36) || `q${taken.size + 1}`;
   if (!/^[a-z]/.test(base)) base = `q_${base}`;
   let id = base;
   for (let k = 2; taken.has(id); k++) id = `${base.slice(0, 33)}_${k}`;
@@ -177,7 +199,7 @@ export function translateTask(task: string, maxQuestions = 8, lang?: Lang): { qu
     const tag = l === "en" ? "" : ` [${l}]`;
     if (RX[l].choice.test(c)) {
       const opts = extractOptions(c, l);
-      const stem = c.replace(new RegExp(`(?::|${NB}(?:${PACKS[l].intro})${NA}[:\\s]).*$`, "iu"), "").trim();
+      const stem = (/[:：]/u.test(c) ? c.replace(/\s*(?:\p{L}+\s*)?[:：].*$/u, "") : c).replace(new RegExp(PACKS[l].loose ? `(?:[:：]|(?:${PACKS[l].intro})).*$` : `(?::|${nb(l)}(?:${PACKS[l].intro})${na(l)}[:\\s]).*$`, "iu"), "").trim();
       questions.push({
         id: slug(stem || c, taken, l), kind: "choice", text: asQuestion(stem || c, l), options: opts, lang: l,
         explain: (opts.length ? `a selection verb plus ${opts.length} options named in the task -> choice` : "a selection verb -> choice, but the task names no options") + tag,

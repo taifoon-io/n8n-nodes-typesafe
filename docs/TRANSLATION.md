@@ -1,5 +1,7 @@
 # What the translation layer can and cannot do
 
+**Languages:** English, Spanish, German, French, Portuguese, Italian, Polish, Dutch, Russian, Japanese, Arabic. The tables below show the English words; every language has the equivalent pack in `translate.ts`. European packs match whole words (Unicode-aware, so accents are safe). Japanese and Arabic match anywhere, because Japanese has no spaces between words and Arabic attaches particles; for the same reason a one-letter particle is never used as a marker. A colon, in any language, always starts the option list.
+
 The node sits between a workflow, which speaks JSON items and branches, and a System One model, which
 speaks typed questions and probabilities. It translates in both directions, in plain code.
 
