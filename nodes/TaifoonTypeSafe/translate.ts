@@ -3,6 +3,7 @@
  *
  *   forward   a plain-language TASK  ->  a battery of typed questions (noul | choice | score)
  *   backward  typed ANSWERS + a routing map  ->  decisions a workflow can branch on
+ *   reply     typed ANSWERS + decisions       ->  sentences in the asker's own language (v3, for chat surfaces)
  *
  * Both are pure, deterministic code. The forward half is a rule compiler, not a model: the same
  * task always yields the same battery, every rule that fired is named in `explain`, and where a
@@ -18,6 +19,8 @@ export interface Compiled {
   text: string;
   options?: string[];
   levels?: string[];
+  /** the clause exactly as the person wrote it; `reply` echoes this, so nothing they said is paraphrased */
+  source?: string;
   /** the language pack that matched this clause */
   lang?: string;
   /** which rule chose this primitive, in words */
@@ -31,7 +34,7 @@ export interface Route {
   /** noul: pass when p >= gte (or <= lte) */
   gte?: number;
   lte?: number;
-  /** choice: pass only when the winner's confidence is at least this; else "review" */
+  /** choice and score: pass only when the model's confidence is at least this; else "review" */
   minConfidence?: number;
   /** choice: pass only when the winner is one of these */
   in?: string[];
@@ -93,7 +96,7 @@ const PACKS: Record<Lang, Pack> = {
   ar: { loose: true, script: /[؀-ۿ]/u, choice: "صن[ّ]?ف|اختر|اختار|حد[ّ]?د (?:أي|الفريق|الفئة)|عي[ّ]?ن|أي من|واحد من|إحدى",
         score: "قي[ّ]?م|قدّر|ما مدى|إلى أي مدى|الإلحاح|الخطورة|الأولوية|الجودة|على مقياس|من \\d+ إلى \\d+",
         intro: "إلى|الى|بين|من بين|واحد من|إحدى|الخيارات|الفئات|الأنواع", or: "أو|او", and: "و", from: "من", to: "إلى|الى|حتى", outOf: "من",
-        lead: "(?:من فضلك )?(?:تحقق|تأكد|حد[ّ]?د|اكتشف|أك[ّ]?د)\\s+(?:مما إذا كان|مما إذا كانت|إذا كان|إذا كانت|من أن|أن)?\\s*", rubric: ["لا شيء", "منخفضة", "متوسطة", "عالية"], stop: "" },
+        lead: "(?:من فضلك )?(?:تحقق|تأكد|حد[ّ]?د|اكتشف|أك[ّ]?د)\\s+(?:مما إذا كانت|مما إذا كان|إذا كانت|إذا كان|من أن|أن)?\\s*", rubric: ["لا شيء", "منخفضة", "متوسطة", "عالية"], stop: "" },
 };
 export const LANGS = Object.keys(PACKS) as Lang[];
 const NB = "(?<![\\p{L}\\p{N}])";            // no letter or digit before
@@ -101,7 +104,7 @@ const NA = "(?![\\p{L}\\p{N}])";             // no letter or digit after
 const word = (alt: string, loose = false, flags = "iu") => new RegExp(loose ? `(?:${alt})` : `${NB}(?:${alt})${NA}`, flags);
 const nb = (l: Lang) => (PACKS[l].loose ? "" : NB);
 const na = (l: Lang) => (PACKS[l].loose ? "" : NA);
-const RX = Object.fromEntries(LANGS.map((l) => [l, { choice: word(PACKS[l].choice, PACKS[l].loose), score: word(PACKS[l].score, PACKS[l].loose), lead: PACKS[l].lead ? new RegExp(`^\\s*(?:${PACKS[l].lead})\\s*`, "iu") : /^(?!)/u }])) as Record<Lang, { choice: RegExp; score: RegExp; lead: RegExp }>;
+const RX = Object.fromEntries(LANGS.map((l) => [l, { choice: word(PACKS[l].choice, PACKS[l].loose), score: word(PACKS[l].score.replace(/\\d\+(?!\\s)/g, "\\d+(?!\\s*\\p{L})"), PACKS[l].loose), lead: PACKS[l].lead ? new RegExp(`^\\s*(?:${PACKS[l].lead})\\s*`, "iu") : /^(?!)/u }])) as Record<Lang, { choice: RegExp; score: RegExp; lead: RegExp }>;
 
 /** which language's words does this clause use? English wins a tie: it is the fallback, not a guess. */
 export function detectLang(clause: string, hint?: Lang): Lang {
@@ -156,8 +159,8 @@ export function extractOptions(clause: string, lang: Lang = "en"): string[] {
 function levelsFor(clause: string, lang: Lang): { levels: string[]; why: string; matched: string | null } {
   const p = PACKS[lang];
   const r = clause.match(p.loose
-    ? new RegExp(`(\\d{1,2})\\s*(?:-|–|—|〜|~|${p.to})\\s*(\\d{1,2})|(\\d{1,2})\\s*(?:${p.outOf})`, "iu")
-    : new RegExp(`${NB}(?:(?:${p.from})\\s+)?(\\d{1,2})\\s*(?:-|–|—|${NB}(?:${p.to})${NA})\\s*(\\d{1,2})${NA}|${NB}(?:${p.outOf})\\s+(\\d{1,2})${NA}`, "iu"));
+    ? new RegExp(`${p.from ? `(?:(?:${p.from})\\s*)?` : ""}(\\d{1,2})\\s*(?:-|–|—|〜|~|${p.to})\\s*(\\d{1,2})|(\\d{1,2})\\s*(?:${p.outOf})`, "iu")
+    : new RegExp(`${NB}(?:(?:${p.from})\\s+)?(\\d{1,2})\\s*(?:-|–|—|${NB}(?:${p.to})${NA})\\s*(\\d{1,2})${NA}|${NB}(?:${p.outOf})\\s+(\\d{1,2})${NA}(?!\\s*\\p{L})`, "iu"));
   if (r) {
     const lo = r[3] ? 1 : Number(r[1]);
     const hi = r[3] ? Number(r[3]) : Number(r[2]);
@@ -183,9 +186,9 @@ function slug(text: string, taken: Set<string>, lang: Lang): string {
 }
 
 const asQuestion = (c: string, lang: Lang) => {
-  const s = c.replace(RX[lang].lead, "").replace(/^[¿¡]\s*/u, "").trim();
+  const s = c.replace(RX[lang].lead, "").replace(/^[¿¡]\s*/u, "").replace(/[\s,;:،、，．。.]+$/u, "").trim();
   const q = s.charAt(0).toLocaleUpperCase() + s.slice(1);
-  return /[?？]$/u.test(q) ? q : `${q}?`;
+  return /[?？؟]$/u.test(q) ? q : `${q}${lang === "ar" ? "؟" : lang === "ja" ? "？" : "?"}`;
 };
 
 /** FORWARD: task -> battery. `lang` pins a language; otherwise each clause is detected on its own, so a mixed task works. */
@@ -201,7 +204,7 @@ export function translateTask(task: string, maxQuestions = 8, lang?: Lang): { qu
       const opts = extractOptions(c, l);
       const stem = (/[:：]/u.test(c) ? c.replace(/\s*(?:\p{L}+\s*)?[:：].*$/u, "") : c).replace(new RegExp(PACKS[l].loose ? `(?:[:：]|(?:${PACKS[l].intro})).*$` : `(?::|${nb(l)}(?:${PACKS[l].intro})${na(l)}[:\\s]).*$`, "iu"), "").trim();
       questions.push({
-        id: slug(stem || c, taken, l), kind: "choice", text: asQuestion(stem || c, l), options: opts, lang: l,
+        id: slug(stem || c, taken, l), kind: "choice", text: asQuestion(stem || c, l), options: opts, source: c, lang: l,
         explain: (opts.length ? `a selection verb plus ${opts.length} options named in the task -> choice` : "a selection verb -> choice, but the task names no options") + tag,
         ...(opts.length ? {} : { needs_input: "list the options to choose between (2 to 50); the translator will not invent them" }),
         routing: { minConfidence: 0.6 },
@@ -209,9 +212,9 @@ export function translateTask(task: string, maxQuestions = 8, lang?: Lang): { qu
     } else if (RX[l].score.test(c)) {
       const { levels, why, matched } = levelsFor(c, l);
       const text = (matched ? c.replace(matched, "") : c).replace(/\s{2,}/g, " ").trim();
-      questions.push({ id: slug(c, taken, l), kind: "score", text: asQuestion(text, l), levels, lang: l, explain: `a rating verb -> score; ${why}${tag}`, routing: { min: Math.ceil((levels.length - 1) / 2) } });
+      questions.push({ id: slug(c, taken, l), kind: "score", text: asQuestion(text, l), levels, source: c, lang: l, explain: `a rating verb -> score; ${why}${tag}`, routing: { min: Math.ceil((levels.length - 1) / 2) } });
     } else {
-      questions.push({ id: slug(c, taken, l), kind: "noul", text: asQuestion(c, l), lang: l, explain: `a statement that is true or false -> noul (the probability it is true)${tag}`, routing: { gte: 0.5 } });
+      questions.push({ id: slug(c, taken, l), kind: "noul", text: asQuestion(c, l), source: c, lang: l, explain: `a statement that is true or false -> noul (the probability it is true)${tag}`, routing: { gte: 0.5 } });
     }
   }
   const notes = [
@@ -260,10 +263,92 @@ export function decide(answers: AnswerLike[], routing: Record<string, Route>): {
       }
     } else {
       const v = Number(a.value);
+      const conf = typeof a.confidence === "number" ? a.confidence : null;
+      // a rating is a centre of mass: when the model is spread across levels it clears a threshold by accident
+      if (r.minConfidence !== undefined && conf !== null && conf < r.minConfidence) {
+        decisions.push({ id: a.id, outcome: "review", reason: `score ${v} at confidence ${conf.toFixed(2)}, below ${r.minConfidence}: a person should look` });
+        continue;
+      }
       const ok = (r.min === undefined || v >= r.min) && (r.max === undefined || v <= r.max);
       decisions.push({ id: a.id, outcome: ok ? "pass" : "fail", reason: `score ${v} against ${r.min !== undefined ? `>= ${r.min}` : ""}${r.max !== undefined ? ` <= ${r.max}` : ""}`.trim() });
     }
   }
   const branch = decisions.some((d) => d.outcome === "review") ? "review" : decisions.every((d) => d.outcome === "pass") && decisions.length > 0 ? "pass" : "fail";
   return { decisions, allPass: branch === "pass", branch };
+}
+
+
+/* ── REPLY: answers -> sentences in the asker's language (_TYPED_TRANSLATE_v3_, 2026-09-21) ──────
+ * The third leg, for chat surfaces. A person asked in their own language; the model answered in
+ * numbers; this says the numbers back as sentences in that language. Like the rest of the layer it is
+ * templates, not a model: the question, the option and the level are echoed exactly as the person
+ * wrote them, and only the glue around them ("Yes, 97% sure", "passing this to a person") is
+ * translated. So nothing is paraphrased, nothing is invented, and the same answers always read the same.
+ * A voice is one row of short strings: adding a language is adding a row. */
+interface Voice { yes: string; likelyYes: string; unsure: string; likelyNo: string; no: string; choice: string; choiceLow: string; pos: string; conf: string; invalid: string; pass: string; fail: string; review: string; needOptions: string }
+const VOICES: Record<Lang, Voice> = {
+  en: { yes: "Yes ({pct}% sure)", likelyYes: "Probably yes ({pct}%)", unsure: "Hard to say ({pct}% likely)", likelyNo: "Probably not ({pct}%)", no: "No ({pct}% sure)", choice: "{value} ({pct}% confident)", choiceLow: "Probably {value}, but not sure ({pct}%)", pos: " ({n} of {max})", conf: ", {pct}% confident", invalid: "No valid answer", pass: "Every check passed.", fail: "At least one check did not pass.", review: "Not sure enough: I am passing this to a person.", needOptions: "List the options to choose between, and I will pick one." },
+  es: { yes: "Sí ({pct}% de certeza)", likelyYes: "Probablemente sí ({pct}%)", unsure: "Difícil de decir ({pct}% de probabilidad)", likelyNo: "Probablemente no ({pct}%)", no: "No ({pct}% de certeza)", choice: "{value} ({pct}% de confianza)", choiceLow: "Probablemente {value}, pero no es seguro ({pct}%)", pos: " ({n} de {max})", conf: ", {pct}% de confianza", invalid: "Sin respuesta válida", pass: "Todas las comprobaciones pasaron.", fail: "Al menos una comprobación no pasó.", review: "No hay suficiente certeza: lo paso a una persona.", needOptions: "Indica las opciones entre las que elegir y escogeré una." },
+  de: { yes: "Ja ({pct} % sicher)", likelyYes: "Wahrscheinlich ja ({pct} %)", unsure: "Schwer zu sagen ({pct} % wahrscheinlich)", likelyNo: "Wahrscheinlich nicht ({pct} %)", no: "Nein ({pct} % sicher)", choice: "{value} ({pct} % Konfidenz)", choiceLow: "Vermutlich {value}, aber unsicher ({pct} %)", pos: " ({n} von {max})", conf: ", {pct} % Konfidenz", invalid: "Keine gültige Antwort", pass: "Alle Prüfungen bestanden.", fail: "Mindestens eine Prüfung ist nicht bestanden.", review: "Nicht sicher genug: Ich gebe das an einen Menschen weiter.", needOptions: "Nenne die Optionen, zwischen denen gewählt werden soll, dann wähle ich eine." },
+  fr: { yes: "Oui (sûr à {pct} %)", likelyYes: "Probablement oui ({pct} %)", unsure: "Difficile à dire ({pct} % de chances)", likelyNo: "Probablement pas ({pct} %)", no: "Non (sûr à {pct} %)", choice: "{value} (confiance {pct} %)", choiceLow: "Probablement {value}, sans certitude ({pct} %)", pos: " ({n} sur {max})", conf: ", confiance {pct} %", invalid: "Pas de réponse valide", pass: "Tous les contrôles sont passés.", fail: "Au moins un contrôle n'est pas passé.", review: "Pas assez de certitude : je transmets à une personne.", needOptions: "Indiquez les options entre lesquelles choisir, et j'en choisirai une." },
+  pt: { yes: "Sim ({pct}% de certeza)", likelyYes: "Provavelmente sim ({pct}%)", unsure: "Difícil dizer ({pct}% de probabilidade)", likelyNo: "Provavelmente não ({pct}%)", no: "Não ({pct}% de certeza)", choice: "{value} ({pct}% de confiança)", choiceLow: "Provavelmente {value}, mas sem certeza ({pct}%)", pos: " ({n} de {max})", conf: ", {pct}% de confiança", invalid: "Sem resposta válida", pass: "Todas as verificações passaram.", fail: "Pelo menos uma verificação não passou.", review: "Não há certeza suficiente: vou passar a uma pessoa.", needOptions: "Indica as opções entre as quais escolher e eu escolho uma." },
+  it: { yes: "Sì (sicuro al {pct}%)", likelyYes: "Probabilmente sì ({pct}%)", unsure: "Difficile da dire ({pct}% di probabilità)", likelyNo: "Probabilmente no ({pct}%)", no: "No (sicuro al {pct}%)", choice: "{value} (confidenza {pct}%)", choiceLow: "Probabilmente {value}, ma non è certo ({pct}%)", pos: " ({n} di {max})", conf: ", confidenza {pct}%", invalid: "Nessuna risposta valida", pass: "Tutti i controlli sono superati.", fail: "Almeno un controllo non è superato.", review: "Non abbastanza certo: lo passo a una persona.", needOptions: "Indica le opzioni tra cui scegliere e ne sceglierò una." },
+  pl: { yes: "Tak (pewność {pct}%)", likelyYes: "Raczej tak ({pct}%)", unsure: "Trudno powiedzieć (prawdopodobieństwo {pct}%)", likelyNo: "Raczej nie ({pct}%)", no: "Nie (pewność {pct}%)", choice: "{value} (pewność {pct}%)", choiceLow: "Prawdopodobnie {value}, ale bez pewności ({pct}%)", pos: " ({n} z {max})", conf: ", pewność {pct}%", invalid: "Brak poprawnej odpowiedzi", pass: "Wszystkie warunki spełnione.", fail: "Co najmniej jeden warunek nie jest spełniony.", review: "Za mało pewności: przekazuję to człowiekowi.", needOptions: "Podaj opcje do wyboru, a wybiorę jedną." },
+  nl: { yes: "Ja ({pct}% zeker)", likelyYes: "Waarschijnlijk wel ({pct}%)", unsure: "Moeilijk te zeggen ({pct}% kans)", likelyNo: "Waarschijnlijk niet ({pct}%)", no: "Nee ({pct}% zeker)", choice: "{value} ({pct}% zekerheid)", choiceLow: "Waarschijnlijk {value}, maar niet zeker ({pct}%)", pos: " ({n} van {max})", conf: ", {pct}% zekerheid", invalid: "Geen geldig antwoord", pass: "Alle controles zijn geslaagd.", fail: "Ten minste één controle is niet geslaagd.", review: "Niet zeker genoeg: ik geef dit door aan een mens.", needOptions: "Noem de opties waaruit gekozen moet worden, dan kies ik er één." },
+  ru: { yes: "Да (уверенность {pct}%)", likelyYes: "Скорее да ({pct}%)", unsure: "Трудно сказать (вероятность {pct}%)", likelyNo: "Скорее нет ({pct}%)", no: "Нет (уверенность {pct}%)", choice: "{value} (уверенность {pct}%)", choiceLow: "Вероятно, {value}, но без уверенности ({pct}%)", pos: " ({n} из {max})", conf: ", уверенность {pct}%", invalid: "Нет корректного ответа", pass: "Все проверки пройдены.", fail: "Как минимум одна проверка не пройдена.", review: "Недостаточно уверенности: передаю человеку.", needOptions: "Перечислите варианты для выбора, и я выберу один." },
+  ja: { yes: "はい（確信度{pct}%）", likelyYes: "おそらくはい（{pct}%）", unsure: "判断が難しいです（可能性{pct}%）", likelyNo: "おそらくいいえ（{pct}%）", no: "いいえ（確信度{pct}%）", choice: "{value}（確信度{pct}%）", choiceLow: "おそらく{value}ですが、確信はありません（{pct}%）", pos: "（{max}段階中{n}）", conf: "、確信度{pct}%", invalid: "有効な回答がありません", pass: "すべての確認を通過しました。", fail: "通過しなかった確認があります。", review: "確信が足りないため、担当者に確認を依頼します。", needOptions: "選択肢を挙げてください。その中から一つ選びます。" },
+  ar: { yes: "نعم (بثقة {pct}%)", likelyYes: "على الأرجح نعم ({pct}%)", unsure: "يصعب الجزم (احتمال {pct}%)", likelyNo: "على الأرجح لا ({pct}%)", no: "لا (بثقة {pct}%)", choice: "{value} (بثقة {pct}%)", choiceLow: "على الأرجح {value}، لكن دون يقين ({pct}%)", pos: " ({n} من {max})", conf: "، بثقة {pct}%", invalid: "لا توجد إجابة صالحة", pass: "اجتازت جميع الفحوص.", fail: "لم يجتز أحد الفحوص على الأقل.", review: "الثقة غير كافية: سأحيل الأمر إلى شخص.", needOptions: "اذكر الخيارات المتاحة للاختيار، وسأختار واحدًا منها." },
+};
+const fill = (t: string, v: Record<string, string | number>) => t.replace(/\{(\w+)\}/g, (_, k: string) => String(v[k] ?? ""));
+const pct = (x: number) => Math.round(Math.min(1, Math.max(0, x)) * 100);
+/** a clause the person wrote, closed with a full stop in its own script so the answer reads as the next sentence */
+const said = (t: string, lang: Lang) => (/[.!?。．？؟:：]$/u.test(t.trim()) ? t.trim() : `${t.trim()}${lang === "ja" ? "。" : "."}`);
+const MARK = { pass: "✓", fail: "✗", review: "?" } as const;
+
+export interface ReplyQuestion { id: string; text?: string; source?: string; levels?: string[] | string; lang?: string }
+export interface ReplyLine { id: string; question: string; answer: string; outcome: "pass" | "fail" | "review" | null }
+export interface Reply { lang: Lang; lines: ReplyLine[]; verdict: string | null; flagHuman: boolean; text: string }
+
+/** REPLY: say typed answers back as sentences. `lang` pins the language; otherwise it is the language most
+ *  of the questions were written in. `decisions`/`branch` (from `decide`) add a mark per line and a verdict. */
+export function reply(answers: AnswerLike[], opts: { lang?: Lang; questions?: ReplyQuestion[]; decisions?: Decision[]; branch?: "pass" | "fail" | "review"; /** clauses that named a selection without options: not asked, and said so in the person's language */ needsInput?: ReplyQuestion[] } = {}): Reply {
+  const qById = new Map((opts.questions ?? []).map((q) => [q.id, q]));
+  let lang = opts.lang;
+  if (!lang || !VOICES[lang]) {
+    const votes = new Map<Lang, number>();
+    for (const q of [...(opts.questions ?? []), ...(opts.needsInput ?? [])]) { const l = (q.lang && VOICES[q.lang as Lang] ? q.lang : q.text ? detectLang(q.text) : "en") as Lang; votes.set(l, (votes.get(l) ?? 0) + 1); }
+    lang = [...votes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "en";
+  }
+  const v = VOICES[lang];
+  const dById = new Map((opts.decisions ?? []).map((d) => [d.id, d]));
+  const lines: ReplyLine[] = answers.map((a) => {
+    const q = qById.get(a.id);
+    const outcome = dById.get(a.id)?.outcome ?? null;
+    let answer: string;
+    if (a.schema_ok === false || a.value === null || a.value === undefined) answer = v.invalid;
+    else if (a.kind === "noul") {
+      const p = typeof a.p === "number" ? a.p : a.value === true ? 1 : 0;
+      answer = p >= 0.8 ? fill(v.yes, { pct: pct(p) }) : p >= 0.6 ? fill(v.likelyYes, { pct: pct(p) }) : p > 0.4 ? fill(v.unsure, { pct: pct(p) }) : p > 0.2 ? fill(v.likelyNo, { pct: pct(1 - p) }) : fill(v.no, { pct: pct(1 - p) });
+    } else if (a.kind === "choice") {
+      const c = typeof a.confidence === "number" ? a.confidence : null;
+      const low = outcome === "review" || (outcome === null && c !== null && c < 0.6);
+      answer = c === null ? String(a.value) : fill(low ? v.choiceLow : v.choice, { value: String(a.value), pct: pct(c) });
+    } else {
+      const asList = (raw: unknown): string[] => Array.isArray(raw) ? raw.map(String) : typeof raw === "string" ? raw.split(/\s*\|\s*/).filter(Boolean) : raw && typeof raw === "object" ? Object.values(raw as Record<string, unknown>).map(String) : [];
+      const fromLegend = asList((a as AnswerLike & { legend?: unknown }).legend);
+      const levels = fromLegend.length ? fromLegend : asList(q?.levels);
+      const n = Math.round(Number(a.value));
+      const label = (levels[n] ?? String(a.value)).replace(/ \((?:lowest|highest)\)$/, "");
+      const where = levels.length ? fill(v.pos, { n: n + 1, max: levels.length }) : "";
+      const c = typeof a.confidence === "number" ? a.confidence : null;
+      // under 0.4 the model is spread across levels: the label is its centre of mass, not a verdict
+      answer = c !== null && (c < 0.4 || outcome === "review") ? fill(v.choiceLow, { value: `${label}${where}`, pct: pct(c) }) : `${label}${where}${c !== null ? fill(v.conf, { pct: pct(c) }) : ""}`;
+    }
+    return { id: a.id, question: said(q?.source ?? q?.text ?? a.id, lang as Lang), answer, outcome };
+  });
+  for (const q of opts.needsInput ?? []) lines.push({ id: q.id, question: said(q.source ?? q.text ?? q.id, lang), answer: v.needOptions, outcome: null });
+  const branch = opts.branch ?? null;
+  const verdict = branch ? v[branch] : null;
+  const body = lines.map((l) => `${l.outcome ? `${MARK[l.outcome]} ` : ""}${l.question} ${l.answer}`);
+  return { lang, lines, verdict, flagHuman: branch === "review" || lines.some((l) => l.outcome === "review"), text: [...body, ...(verdict ? [verdict] : [])].join("\n") };
 }

@@ -1,5 +1,5 @@
 // Offline self-test for the dual translation layer. Run: npx tsx lib/typed-translate.selftest.mjs
-import { translateTask, decide, clauses, detectLang, LANGS } from "./translate.ts";
+import { translateTask, decide, clauses, detectLang, LANGS, reply } from "./translate.ts";
 let fails = 0; const t = (name, ok) => { console.log((ok ? "ok   " : "FAIL ") + name); if (!ok) fails++; };
 const task = "Check if the customer is asking for a refund. Classify the ticket into billing, technical, sales or abuse. Rate the urgency from 1 to 5. Decide which language to reply in.";
 const { questions: q } = translateTask(task);
@@ -59,4 +59,41 @@ t("pinning a language overrides detection", translateTask("Rate the urgency from
 t("accented words are whole words: 'clasifica' inside 'desclasificado' is not a selection verb", translateTask("El documento fue desclasificado ayer.").questions[0].kind === "noul");
 t("an English sentence is not mistaken for another language", detectLang("Is the customer asking for a refund?") === "en");
 t("an unsupported language still compiles, as a yes/no, and says which rules were used", translateTask("고객이 환불을 요청하고 있습니까").questions[0].kind === "noul" && translateTask("x y z w").notes.some((n) => n.includes(LANGS.join(", "))));
+// ── reply: answers said back in the asker's language ──
+const RQ = [{ id: "a", text: "Is the customer asking for a refund?" }, { id: "b", text: "Which team?" }, { id: "c", text: "How urgent is this?", levels: ["None", "Low", "Medium", "High", "Critical"] }, { id: "d", text: "Is it spam?" }];
+const r0 = reply(A, { questions: RQ });
+t("reply: English questions are answered in English, one line per answer", r0.lang === "en" && r0.lines.length === A.length);
+t("reply: a confident yes reads as yes with its percentage", reply([{ id: "a", kind: "noul", p: 0.97, value: true }], { questions: RQ }).lines[0].answer === "Yes (97% sure)");
+t("reply: a confident no reports how sure it is of NO, not the 3%", reply([{ id: "a", kind: "noul", p: 0.03, value: false }], { questions: RQ }).lines[0].answer === "No (97% sure)");
+t("reply: a coin-flip never reads as yes or no", reply([{ id: "a", kind: "noul", p: 0.5, value: true }], { questions: RQ }).lines[0].answer.startsWith("Hard to say"));
+t("reply: a score is named by ITS level label, with its place on the rubric", reply([{ id: "c", kind: "score", value: 2.4, confidence: 0.7 }], { questions: RQ }).lines[0].answer === "Medium (3 of 5), 70% confident");
+t("reply: a numeric scale keeps its place on the scale, so 3 is never read as 3 of 10", reply([{ id: "c", kind: "score", value: 2, confidence: 0.7 }], { questions: [{ id: "c", text: "Urgency?", levels: "1 | 2 | 3 | 4 | 5" }] }).lines[0].answer === "3 (3 of 5), 70% confident");
+t("reply: the model's own legend outranks the question's levels", reply([{ id: "c", kind: "score", value: 1, legend: { 0: "calm", 1: "busy" } }], { questions: RQ }).lines[0].answer === "busy (2 of 2)");
+t("reply: an invalid answer says so and never reads as a no", reply([A[3]], { questions: RQ }).lines[0].answer === "No valid answer");
+const dz = decide([A[0], A[1]], { a: { gte: 0.7 }, b: { minConfidence: 0.6 } });
+const rz = reply([A[0], A[1]], { questions: RQ, decisions: dz.decisions, branch: dz.branch });
+t("reply: review flags a human, marks the unsure line, and says so in the verdict", rz.flagHuman === true && rz.lines[1].outcome === "review" && rz.lines[1].answer.startsWith("Probably ") && rz.verdict.includes("person") && rz.text.split("\n").length === 3);
+t("reply: without routing there is no verdict and nobody is flagged", r0.verdict === null && r0.flagHuman === false);
+const jq = translateTask("顧客は返金を求めていますか。チケットを次のいずれかに分類してください：請求、技術、営業、不正。").questions;
+const jr = reply([{ id: jq[0].id, kind: "noul", p: 0.99, value: true }, { id: jq[1].id, kind: "choice", value: "請求", confidence: 0.93 }], { questions: jq, branch: "pass" });
+t("reply: a Japanese task is answered in Japanese, echoing the user's own option", jr.lang === "ja" && jr.lines[0].answer === "はい（確信度99%）" && jr.lines[1].answer === "請求（確信度93%）" && jr.verdict.includes("通過しました"));
+t("reply: every language has a complete voice with its placeholders intact", LANGS.every((l) => { const x = reply([{ id: "a", kind: "noul", p: 0.9, value: true }, { id: "b", kind: "choice", value: "X", confidence: 0.3 }, { id: "c", kind: "score", value: 1, confidence: 0.5 }], { lang: l, questions: RQ, branch: "review" }); return x.lang === l && x.lines[0].answer.includes("90") && x.lines[1].answer.includes("X") && x.lines[1].answer.includes("30") && x.lines[2].answer.includes("Low") && x.lines[2].answer.includes("50") && !/[{}]/.test(x.text) && x.verdict.length > 8; }));
+t("reply: pinning a language overrides detection", reply([A[0]], { questions: RQ, lang: "pl" }).lang === "pl");
+t("reply: is deterministic", JSON.stringify(reply(A, { questions: RQ })) === JSON.stringify(reply(A, { questions: RQ })));
+// ── found by the first run against the real model, 2026-09-21 ──
+t("fr: 'moyenne sur 20 bougies' counts candles, it is not a rating out of 20", translateTask("Vérifie si le prix est au-dessus de sa moyenne sur 20 bougies.").questions[0].kind === "noul");
+t("en: 'out of 10' is still a scale when nothing is being counted", translateTask("Rate the tone out of 10").questions[0].levels.length === 10 && translateTask("Check if 3 out of 10 orders failed.").questions[0].kind === "noul");
+t("ar: the feminine 'كانت' lead is stripped whole, leaving no stray letter", translateTask("تحقق مما إذا كانت جلسة نيويورك الصباحية مفتوحة الآن.").questions[0].text === "جلسة نيويورك الصباحية مفتوحة الآن؟");
+t("ar: removing the scale takes its 'من' with it", translateTask("قيّم مستوى التقلب من 1 إلى 5.").questions[0].text === "قيّم مستوى التقلب؟");
+t("de: a question never ends in a dangling comma", translateTask("Bewerte die Dringlichkeit, eine Long-Position zu verkleinern, von 1 bis 5.").questions[0].text === "Bewerte die Dringlichkeit, eine Long-Position zu verkleinern?");
+t("every question keeps the clause exactly as it was written", translateTask(task).questions.every((x) => task.includes(x.source)));
+t("reply: echoes the person's own clause, not the compiled question", reply([{ id: "x", kind: "noul", p: 0.99, value: true }], { questions: [{ id: "x", text: "Der Kurs über dem Durchschnitt liegt?", source: "Prüfe, ob der Kurs über dem Durchschnitt liegt" }] }).text === "Prüfe, ob der Kurs über dem Durchschnitt liegt. Yes (99% sure)".replace("Yes (99% sure)", "Ja (99 % sicher)"));
+t("reply: a rating the model is spread across is said as unsure, never as a verdict", reply([{ id: "c", kind: "score", value: 2.25, confidence: 0 }], { questions: RQ }).lines[0].answer === "Probably Medium (3 of 5), but not sure (0%)");
+t("reply: our English scale annotations never leak into another language", !reply([{ id: "c", kind: "score", value: 0, confidence: 0.9, legend: { 0: "1 (lowest)", 1: "2" } }], { lang: "ru", questions: RQ }).text.includes("lowest"));
+t("reply: a verdict states the outcome and never an action", !/going ahead|weiter|進めます/.test(LANGS.map((l) => reply([], { lang: l, branch: "pass" }).verdict).join(" ")));
+t("a rating the model is unsure of goes to review when the gate asks for confidence, and passes as before when it does not", decide([{ id: "c", kind: "score", value: 3.4, confidence: 0.38 }], { c: { min: 3, minConfidence: 0.5 } }).branch === "review" && decide([{ id: "c", kind: "score", value: 3.4, confidence: 0.38 }], { c: { min: 3 } }).branch === "pass");
+t("reply: a rating sent to review reads as unsure even at 40%", reply([{ id: "c", kind: "score", value: 3, confidence: 0.4 }], { questions: RQ, decisions: [{ id: "c", outcome: "review", reason: "" }], branch: "review" }).lines[0].answer.startsWith("Probably "));
+const ni = translateTask("Sklasyfikuj rynek.").questions;
+t("reply: a selection with no options is asked for in the person's language, and nothing is answered", reply([], { needsInput: ni }).lang === "pl" && reply([], { needsInput: ni }).text === "Sklasyfikuj rynek. Podaj opcje do wyboru, a wybiorę jedną.");
+t("reply: every voice can ask for options", LANGS.every((l) => reply([], { lang: l, needsInput: [{ id: "x", text: "X" }] }).lines[0].answer.length > 10));
 console.log(fails ? `\nSELF-TEST RED · ${fails} failed` : "\nSELF-TEST GREEN"); process.exit(fails ? 1 : 0);

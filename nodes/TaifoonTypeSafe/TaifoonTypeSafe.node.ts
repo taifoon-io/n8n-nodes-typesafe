@@ -1,7 +1,7 @@
 import type { IDataObject, IExecuteFunctions, IHttpRequestOptions, INode, INodeExecutionData, INodeType, INodeTypeDescription, JsonObject } from 'n8n-workflow';
 import { NodeApiError, NodeConnectionTypes, NodeOperationError, sleep } from 'n8n-workflow';
 
-import { decide, translateTask, type AnswerLike, type Lang, type Route } from './translate';
+import { decide, reply, translateTask, type AnswerLike, type Lang, type Route } from './translate';
 
 /**
  * TypeSafe for n8n.
@@ -15,7 +15,7 @@ import { decide, translateTask, type AnswerLike, type Lang, type Route } from '.
  * and Routing turns answers into the Pass / Fail / Review outputs. No dependency, no model call.
  */
 
-interface UiQuestion { id: string; kind: 'noul' | 'choice' | 'score'; text: string; options?: string; levels?: string }
+interface UiQuestion { id: string; kind: 'noul' | 'choice' | 'score'; text: string; options?: string; levels?: string; /** set by Translate: the clause as the person wrote it, echoed by the reply */ source?: string }
 
 const split = (s: string | undefined, sep: RegExp) => String(s ?? '').split(sep).map((x) => x.trim()).filter(Boolean);
 
@@ -25,6 +25,20 @@ function safeError(error: unknown): JsonObject {
 	const status = e.httpCode ?? e.response?.status ?? 'unknown';
 	const said = typeof e.response?.data === 'object' && e.response?.data !== null ? JSON.stringify(e.response.data).slice(0, 300) : String(e.description ?? e.message ?? '').slice(0, 300);
 	return { message: `Request failed (${status})`, description: said.replace(REDACT, '$1[redacted]'), httpCode: String(status) };
+}
+
+/** n8n words a 402 as "check your payment details", which is wrong for a free trial and unhelpful for a
+ *  rejected key. For the statuses a person can act on, say what to do next. */
+function nextStep(status: number, connection: string): string | undefined {
+	if (connection === 'trial') {
+		if (status === 402) return 'The free calls for this server are used up. Create a TypeSafe API credential with your own key from console.typesafe.ai and switch Connection to "Direct to TypeSafe".';
+		if (status === 413 || status === 400) return 'The free trial takes up to 4 questions and 4,000 characters per call. Send less, or use your own key.';
+		if (status === 429) return 'The free trial is busy. Wait a minute, or use your own key.';
+		return undefined;
+	}
+	if (status === 401 || status === 403) return 'TypeSafe rejected the key. Check the TypeSafe API credential: the key may have been rotated or revoked at console.typesafe.ai.';
+	if (status === 402) return 'TypeSafe reports the account has no credit. Top it up at console.typesafe.ai.';
+	return undefined;
 }
 
 /** TypeSafe asks for exponential backoff on 429 (rate limited) and 529 (overloaded). */
@@ -101,6 +115,11 @@ export class TaifoonTypeSafe implements INodeType {
 				options: [
 					{ name: 'Arabic', value: 'ar' }, { name: 'Auto-Detect', value: 'auto' }, { name: 'Dutch', value: 'nl' }, { name: 'English', value: 'en' }, { name: 'French', value: 'fr' }, { name: 'German', value: 'de' },
 					{ name: 'Italian', value: 'it' }, { name: 'Japanese', value: 'ja' }, { name: 'Polish', value: 'pl' }, { name: 'Portuguese', value: 'pt' }, { name: 'Russian', value: 'ru' }, { name: 'Spanish', value: 'es' }] },
+			{ displayName: 'Reply Language', name: 'replyLanguage', type: 'options', default: 'off', displayOptions: { show: { operation: ['ask'] } },
+				description: 'Adds a "reply" to the output: the answers and the verdict as sentences a person can read, for chat surfaces. Match Questions answers in the language the questions were written in. Templates, not a model: free, offline, and the same answers always read the same.',
+				options: [
+					{ name: 'Arabic', value: 'ar' }, { name: 'Dutch', value: 'nl' }, { name: 'English', value: 'en' }, { name: 'French', value: 'fr' }, { name: 'German', value: 'de' }, { name: 'Italian', value: 'it' },
+					{ name: 'Japanese', value: 'ja' }, { name: 'Match Questions', value: 'auto' }, { name: 'Off', value: 'off' }, { name: 'Polish', value: 'pl' }, { name: 'Portuguese', value: 'pt' }, { name: 'Russian', value: 'ru' }, { name: 'Spanish', value: 'es' }] },
 			{ displayName: 'Fail Closed', name: 'failClosed', type: 'boolean', default: true, displayOptions: { show: { operation: ['ask'] } },
 				description: 'Whether an answer that did not validate stops the item with an error instead of flowing on as a null' },
 		],
@@ -122,7 +141,7 @@ export class TaifoonTypeSafe implements INodeType {
 					const runnable = questions.filter((q) => !q.needs_input);
 					pass.push({ pairedItem: { item: i }, json: {
 						ready: questions.length > 0 && runnable.length === questions.length, deterministic: true, languages: langs, questions, dropped, notes,
-						ask: { questions: runnable.map((q) => ({ id: q.id, kind: q.kind, text: q.text, ...(q.options ? { options: q.options.join(', ') } : {}), ...(q.levels ? { levels: q.levels.join(' | ') } : {}) })),
+						ask: { questions: runnable.map((q) => ({ id: q.id, kind: q.kind, text: q.text, source: q.source, ...(q.options ? { options: q.options.join(', ') } : {}), ...(q.levels ? { levels: q.levels.join(' | ') } : {}) })),
 							// routing is EMPTY on purpose. The branch is the AND of every routed question, so auto-filling
 							// thresholds made a calm refund ticket "fail" for not being urgent. Route only what you mean to gate on.
 							routing: {} },
@@ -183,14 +202,21 @@ export class TaifoonTypeSafe implements INodeType {
 				const routed = Object.keys(routing).length ? decide(answers, routing) : null;
 				const byId: IDataObject = {};
 				for (const a of answers) byId[a.id] = a as unknown as IDataObject;
+				const replyIn = this.getNodeParameter('replyLanguage', i, 'off') as string;
+				const said = replyIn === 'off' ? null : reply(answers, { lang: replyIn === 'auto' ? undefined : (replyIn as Lang), questions: qs.map((q) => ({ id: q.id, text: q.text, source: q.source, levels: q.levels })),
+					decisions: routed?.decisions, branch: routed?.branch });
 				const out: INodeExecutionData = { pairedItem: { item: i }, json: { ...meta, schema_ok: schemaOk, answers: byId,
-					...(routed ? { decisions: routed.decisions as unknown as IDataObject[], allPass: routed.allPass, branch: routed.branch } : { branch: 'pass' }) } };
+					...(routed ? { decisions: routed.decisions as unknown as IDataObject[], allPass: routed.allPass, branch: routed.branch } : { branch: 'pass' }),
+					...(said ? { reply: said as unknown as IDataObject } : {}) } };
 				(routed?.branch === 'fail' ? fail : routed?.branch === 'review' ? review : pass).push(out);
 			} catch (error) {
 				if (this.continueOnFail()) { review.push({ json: { error: String((error as Error).message ?? 'request failed').replace(/(apikey_|tfn_live_|Bearer\s+)[A-Za-z0-9_.-]+/g, '$1[redacted]'), branch: 'review' }, pairedItem: { item: i } }); continue; }
 				if (error instanceof NodeOperationError) throw new NodeOperationError(this.getNode(), error.message, { itemIndex: i, description: error.description ?? undefined });
+				const safe = safeError(error);
+				const step = nextStep(Number(safe.httpCode), String(this.getNodeParameter('connection', i, 'direct')));
+				if (step) throw new NodeOperationError(this.getNode(), step, { itemIndex: i, description: String(safe.description ?? '') });
 				// never the raw HTTP error: it carries request headers, and n8n stores failed executions
-				throw new NodeApiError(this.getNode(), safeError(error), { itemIndex: i });
+				throw new NodeApiError(this.getNode(), safe, { itemIndex: i });
 			}
 		}
 		return [pass, fail, review];

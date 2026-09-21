@@ -1,0 +1,199 @@
+{
+  "name": "TypeSafe — trading gates, answered in the asker's language",
+  "active": false,
+  "nodes": [
+    {
+      "id": "s",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        60,
+        200
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "tJA",
+      "name": "Translate JA",
+      "type": "@taifoon/n8n-nodes-typesafe.taifoonTypeSafe",
+      "typeVersion": 1,
+      "position": [
+        300,
+        100
+      ],
+      "parameters": {
+        "operation": "translate",
+        "task": "この注文の数量は通常より異常に大きいですか。この注文を次のいずれかに分類してください：通常、要確認、誤発注の疑い。",
+        "language": "auto"
+      }
+    },
+    {
+      "id": "aJA",
+      "name": "Ask JA",
+      "type": "@taifoon/n8n-nodes-typesafe.taifoonTypeSafe",
+      "typeVersion": 1,
+      "position": [
+        560,
+        100
+      ],
+      "credentials": {
+        "typeSafeApi": {
+          "name": "TypeSafe API"
+        }
+      },
+      "parameters": {
+        "operation": "ask",
+        "connection": "direct",
+        "state": "{\"market_facts\": {\"market\": \"BTC\", \"timeframe\": \"5m\", \"as_of_utc\": \"2026-09-21T08:55:00.000Z\", \"last_close\": 83795.8, \"sma20\": 82276.63, \"close_vs_sma20_pct\": 1.846, \"price_is_above_sma20\": true, \"change_last_hour_pct\": 2.559, \"typical_abs_hourly_change_pct\": 0.262, \"last_hour_move_vs_typical\": 9.78, \"change_last_5h_pct\": 2.993, \"up_bars_in_last_10\": 8, \"atr14\": 343.07, \"atr14_vs_its_median\": 2.78, \"range_5h_high\": 84182.9, \"range_5h_low\": 81210.2, \"position_in_5h_range_0_to_1\": 0.87, \"volume_last_hour_vs_median_hour\": 7.35, \"weekday_utc\": \"Mon\", \"ny_morning_session_open\": false}, \"order\": {\"side\": \"buy\", \"quantity\": 0.25, \"this_account_typical_quantity\": 0.2, \"this_account_largest_quantity_30d\": 0.6}}",
+        "questions": {},
+        "questionsJson": "={{ JSON.stringify($json.ask.questions) }}",
+        "routing": "={{ JSON.stringify(Object.fromEntries($json.ask.questions.map((q, i) => [q.id, [{\"lte\": 0.3}, {\"minConfidence\": 0.6, \"in\": [\"\\u901a\\u5e38\"]}][i]]).filter(([, g]) => g))) }}",
+        "replyLanguage": "auto",
+        "failClosed": true
+      }
+    },
+    {
+      "id": "tRU",
+      "name": "Translate RU",
+      "type": "@taifoon/n8n-nodes-typesafe.taifoonTypeSafe",
+      "typeVersion": 1,
+      "position": [
+        300,
+        300
+      ],
+      "parameters": {
+        "operation": "translate",
+        "task": "Проверь, находится ли цена у верхней границы диапазона последних 5 часов. Классифицируй рынок как: тренд вверх, тренд вниз, боковик. Оцени риск входа в лонг сейчас от 1 до 5.",
+        "language": "auto"
+      }
+    },
+    {
+      "id": "aRU",
+      "name": "Ask RU",
+      "type": "@taifoon/n8n-nodes-typesafe.taifoonTypeSafe",
+      "typeVersion": 1,
+      "position": [
+        560,
+        300
+      ],
+      "credentials": {
+        "typeSafeApi": {
+          "name": "TypeSafe API"
+        }
+      },
+      "parameters": {
+        "operation": "ask",
+        "connection": "direct",
+        "state": "{\"market\": \"BTC\", \"timeframe\": \"5m\", \"as_of_utc\": \"2026-09-21T08:55:00.000Z\", \"last_close\": 83795.8, \"sma20\": 82276.63, \"close_vs_sma20_pct\": 1.846, \"price_is_above_sma20\": true, \"change_last_hour_pct\": 2.559, \"typical_abs_hourly_change_pct\": 0.262, \"last_hour_move_vs_typical\": 9.78, \"change_last_5h_pct\": 2.993, \"up_bars_in_last_10\": 8, \"atr14\": 343.07, \"atr14_vs_its_median\": 2.78, \"range_5h_high\": 84182.9, \"range_5h_low\": 81210.2, \"position_in_5h_range_0_to_1\": 0.87, \"volume_last_hour_vs_median_hour\": 7.35, \"weekday_utc\": \"Mon\", \"ny_morning_session_open\": false}",
+        "questions": {},
+        "questionsJson": "={{ JSON.stringify($json.ask.questions) }}",
+        "routing": "={{ JSON.stringify(Object.fromEntries($json.ask.questions.map((q, i) => [q.id, [{\"gte\": 0.7}, {\"minConfidence\": 0.6}, {\"max\": 2, \"minConfidence\": 0.4}][i]]).filter(([, g]) => g))) }}",
+        "replyLanguage": "auto",
+        "failClosed": true
+      }
+    },
+    {
+      "id": "tEN-to-PL",
+      "name": "Translate EN-to-PL",
+      "type": "@taifoon/n8n-nodes-typesafe.taifoonTypeSafe",
+      "typeVersion": 1,
+      "position": [
+        300,
+        500
+      ],
+      "parameters": {
+        "operation": "translate",
+        "task": "Check if price is above its 20-bar average. Rate how stretched price is from its average from 1 to 5.",
+        "language": "auto"
+      }
+    },
+    {
+      "id": "aEN-to-PL",
+      "name": "Ask EN-to-PL",
+      "type": "@taifoon/n8n-nodes-typesafe.taifoonTypeSafe",
+      "typeVersion": 1,
+      "position": [
+        560,
+        500
+      ],
+      "credentials": {
+        "typeSafeApi": {
+          "name": "TypeSafe API"
+        }
+      },
+      "parameters": {
+        "operation": "ask",
+        "connection": "direct",
+        "state": "{\"market\": \"NQ\", \"timeframe\": \"5m\", \"as_of_utc\": \"2026-09-21T08:55:00.000Z\", \"last_close\": 30236.5, \"sma20\": 30191.66, \"close_vs_sma20_pct\": 0.149, \"price_is_above_sma20\": true, \"change_last_hour_pct\": 0.191, \"typical_abs_hourly_change_pct\": 0.088, \"last_hour_move_vs_typical\": 2.17, \"change_last_5h_pct\": 0.504, \"up_bars_in_last_10\": 5, \"atr14\": 18.96, \"atr14_vs_its_median\": 1.29, \"range_5h_high\": 30237.75, \"range_5h_low\": 30071, \"position_in_5h_range_0_to_1\": 0.99, \"volume_last_hour_vs_median_hour\": 1.36, \"weekday_utc\": \"Mon\", \"ny_morning_session_open\": false}",
+        "questions": {},
+        "questionsJson": "={{ JSON.stringify($json.ask.questions) }}",
+        "routing": "{}",
+        "replyLanguage": "pl",
+        "failClosed": true
+      }
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Translate JA",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Translate RU",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Translate EN-to-PL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Translate JA": {
+      "main": [
+        [
+          {
+            "node": "Ask JA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Translate RU": {
+      "main": [
+        [
+          {
+            "node": "Ask RU",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Translate EN-to-PL": {
+      "main": [
+        [
+          {
+            "node": "Ask EN-to-PL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "note": "The market facts in each Ask node are a snapshot computed in code from public 5-minute candles. Replace them with your own upstream calculation: the model judges, it does not calculate. Gates are given by position over the ids Translate chose."
+  }
+}
