@@ -49,5 +49,4 @@ threshold on your own labelled items, and leave a question unrouted until you ha
 
 With `jev`, state is any JSON up to 96,000 characters: `{{ JSON.stringify($json) }}` sends the whole
 incoming item. Compute first, judge second: do arithmetic in a Code node and send the result; ask the
-model for judgment, never for a sum. House models (`algotrada`, `auditor`) need a flat object of
-numbers and short symbols, answer noul and choice only, and return an uncalibrated boolean.
+model for judgment, never for a sum.
