@@ -167,6 +167,32 @@ the output gains a `reply`:
 The same eleven languages as Translate, and the same request: a voice is one row of thirteen short
 strings in [`translate.ts`](nodes/TaifoonTypeSafe/translate.ts). Native speakers, please correct ours.
 
+## Raw output: the model's own numbers, untouched
+
+Everything above — Routing, Reply, the per-question shaping — is this node interpreting the answer for
+you. When you would rather do that yourself, turn on **Raw Output** on the Ask operation. The node then
+returns the API's answer *exactly as TypeSafe sent it*, with none of its interpretation:
+
+```json
+{ "model": "jev-latest", "provider": "typesafe", "connection": "direct", "latency_ms": 812,
+  "usage": { "input_tokens": 545 },
+  "raw": { "model": "jev-latest",
+    "answers": {
+      "is_refund":   { "noul": 0.98 },
+      "urgency":     { "score": 3.6, "confidence": 0.41, "probabilities": [ ... ], "legend": [ ... ] },
+      "which_lane":  { "choice": "billing", "confidence": 0.77, "probabilities": { "billing": 0.77, "shipping": 0.19, "other": 0.04 } }
+    } } }
+```
+
+- **No Routing, no Reply, no reshaping.** `raw` is the whole `{answers, model, usage}` object the model
+  returned. The probabilities, confidences and `noul`/`score`/`choice` values are the model's own — this
+  is the `--raw` form for when you want the raw calibration to feed your own logic, a training set, or a
+  model that learns from Jev's best cases.
+- **Everything flows on the first output.** The fail/review outputs are a Routing feature, and Routing
+  is skipped in raw mode, so nothing is split off.
+- Works on both connections (your key and the free trial). `Fail Closed` still applies before the raw
+  object is emitted, so a malformed answer still stops the item unless you turn it off.
+
 ## Basic trading tasks, with gates
 
 A worked example of the whole loop on something less forgiving than support tickets. These are real:
