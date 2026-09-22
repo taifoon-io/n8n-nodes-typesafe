@@ -148,6 +148,8 @@ export class TaifoonTypeSafe implements INodeType {
 					{ name: 'Japanese', value: 'ja' }, { name: 'Match Questions', value: 'auto' }, { name: 'Off', value: 'off' }, { name: 'Polish', value: 'pl' }, { name: 'Portuguese', value: 'pt' }, { name: 'Russian', value: 'ru' }, { name: 'Spanish', value: 'es' }] },
 			{ displayName: 'Fail Closed', name: 'failClosed', type: 'boolean', default: true, displayOptions: { show: { operation: ['ask'] } },
 				description: 'Whether an answer that did not validate stops the item with an error instead of flowing on as a null' },
+			{ displayName: 'Raw Output', name: 'rawOutput', type: 'boolean', default: false, displayOptions: { show: { operation: ['ask'] } },
+				description: 'Whether to return Jev\'s answer exactly as TypeSafe sends it, with none of this node\'s interpretation. Skips Translate/Routing/Reply and the per-question shaping: the output is the raw {answers, model, usage} the API returned. Use this to get the model\'s own numbers and probabilities untouched and do your own downstream logic. Routing outputs (fail/review) are not produced in raw mode — everything flows on the first output.' },
 		],
 	};
 
@@ -193,6 +195,9 @@ export class TaifoonTypeSafe implements INodeType {
 
 				let answers: AnswerLike[] = [];
 				let meta: IDataObject = {};
+				// The API's response verbatim, kept for Raw Output — the model's own
+				// {answers, model, usage}, before any of this node's interpretation.
+				let rawRes: IDataObject = {};
 				if (connection === 'direct') {
 					const cred = await this.getCredentials('taifoonTypeSafeApi');
 					const questions: Record<string, IDataObject> = {};
@@ -208,6 +213,7 @@ export class TaifoonTypeSafe implements INodeType {
 					const req: IHttpRequestOptions = { method: 'POST', url: `${base}/v1/systemone`, body: { model: 'jev-latest', state, questions }, json: true, timeout: 60000 };
 					const started = Date.now();
 					const res = (await withBackoff(this.getNode(), () => this.helpers.httpRequestWithAuthentication.call(this, 'taifoonTypeSafeApi', req))) as { model?: string; answers?: Record<string, IDataObject>; usage?: IDataObject };
+					rawRes = res as unknown as IDataObject;
 					answers = qs.map((q) => {
 						const a = (res.answers ?? {})[q.id];
 						if (!a) return { id: q.id, kind: q.kind, schema_ok: false, value: null };
@@ -220,6 +226,7 @@ export class TaifoonTypeSafe implements INodeType {
 					const res = await askTrial(this, { state: state as IDataObject, questions: qs.map((q) => ({ id: q.id, kind: q.kind, text: q.text,
 						...(q.kind === 'choice' ? { options: Object.fromEntries(parseOptions(q.options)) } : {}), ...(q.kind === 'score' ? { levels: split(q.levels, /\s*\|\s*/) } : {}),
 						...(q.kind === 'noul' && q.yesMeans?.trim() ? { yes_means: q.yesMeans.trim() } : {}), ...(q.kind === 'noul' && q.noMeans?.trim() ? { no_means: q.noMeans.trim() } : {}) })) });
+					rawRes = res as unknown as IDataObject;
 					answers = (res.answers as unknown as AnswerLike[]) ?? [];
 					meta = { model: res.model, provider: 'typesafe', connection, latency_ms: res.latency_ms, usage: res.usage, trial: res.trial, next: res.next };
 				} else {
@@ -229,6 +236,17 @@ export class TaifoonTypeSafe implements INodeType {
 				const schemaOk = answers.every((a) => a.schema_ok !== false);
 				if (this.getNodeParameter('failClosed', i) && !schemaOk) {
 					throw new NodeOperationError(this.getNode(), 'An answer did not validate; failing closed', { itemIndex: i, description: JSON.stringify(answers.filter((a) => a.schema_ok === false).map((a) => a.id)) });
+				}
+				// _RAW_OUTPUT_v1_ (1.4.0): return the API's answer verbatim, with NONE of
+				// this node's interpretation — no Routing (decide), no Reply (reply), no
+				// per-question shaping. The output is exactly {answers, model, usage} as
+				// TypeSafe sent it, plus this node's meta. Everything flows on the first
+				// output; the fail/review outputs are a Routing feature, and Routing is
+				// skipped in raw mode. This is the "--raw" form: the model's own numbers
+				// and probabilities, untouched, for callers doing their own downstream logic.
+				if (this.getNodeParameter('rawOutput', i, false)) {
+					pass.push({ pairedItem: { item: i }, json: { ...meta, schema_ok: schemaOk, raw: rawRes } });
+					continue;
 				}
 				// the backward translation runs HERE, identically on both connections
 				const routed = Object.keys(routing).length ? decide(answers, routing) : null;
