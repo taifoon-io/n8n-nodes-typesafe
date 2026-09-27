@@ -1,4 +1,4 @@
-// GENERATED from @taifoon/jev (judge/sdk/src) by judge/sdk/scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
+// GENERATED from @taifoon/jev (src/) by its scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
 // Where the records and the evaluator seats live. Every address here was read from the chain or from its deploy
 // broadcast; nothing is deployed by this package.
 export const CONTRACTS = Object.freeze({
@@ -22,7 +22,7 @@ export const CONTRACTS = Object.freeze({
     answerLog: { address: '0x8e9B9cE86a2d55c10318607b0c815B7B8C66254d', fromBlock: 51_863_008 } as { address: string; fromBlock: number } | null,
     /** JevDecisionLog, deployed 2026-09-27 (tx 0x0e6300c0…4fc7); the recorder is msg.sender */
     decisionLog: { address: '0x209490d6A0FFC5368A42b0c2208BDCda853f6a92', fromBlock: 51_856_200 } as { address: string; fromBlock: number } | null,
-    /** the one trusted recorder of the Base answer log (KMS alias/jev-recorder-base) */
+    /** the one trusted recorder of the Base answer log */
     answerRecorder: '0xe9F0E71e7Fc66864126C0aE5588a7858b25dE51D',
     virtualsErc8183: '0x238E541BfefD82238730D00a2208E5497F1832E0',
     virtualsMemoAcpRouter: '0xa6C9BA866992cfD7fd6460ba912bfa405adA9df0',

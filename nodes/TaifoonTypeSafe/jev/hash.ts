@@ -1,4 +1,4 @@
-// GENERATED from @taifoon/jev (judge/sdk/src) by judge/sdk/scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
+// GENERATED from @taifoon/jev (src/) by its scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
 // sha256 and keccak256 in plain TypeScript, so the package has no runtime dependency and runs the same in Node, a
 // browser, a worker or an n8n node. Both are checked against viem and node:crypto in test/hash.test.ts.
 export type Hex = `0x${string}`;

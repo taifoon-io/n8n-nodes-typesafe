@@ -7,7 +7,7 @@ agents, Claude. It is a separate service run by Taifoon, not part of this npm pa
 ```
 URL        https://typesafe.taifoon.dev/mcp
 Transport  HTTP Streamable (stateless: one POST, one JSON answer)
-Auth       Bearer = your own TypeSafe key (console.typesafe.ai), or none for 3 free calls
+Auth       Bearer = your own TypeSafe key (console.typesafe.ai), required
 ```
 
 | tool | what it does | model call |
@@ -53,5 +53,4 @@ never written, never logged, never returned. Logs hold the tool name, the outcom
 caller, the country and the client product; never the key, the address, the state or a question's text.
 If you would rather have nobody in the path, use this package's node with the direct connection.
 
-Limits: 60 requests a minute per address. With a key: 20 questions and a 32,000-character state per call.
-Without: 4 questions, 4,000 characters, 3 calls in total, shared with the node's Free Trial connection.
+Limits: 60 requests a minute per address, 20 questions and a 32,000-character state per call.

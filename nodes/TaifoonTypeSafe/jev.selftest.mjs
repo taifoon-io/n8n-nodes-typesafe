@@ -17,10 +17,11 @@ function ctx(params, calls) {
 		getNodeParameter: (name, _i, fallback) => (name in params ? params[name] : fallback),
 		getNode: () => ({ name: 'TypeSafe', type: 'taifoonTypeSafe', typeVersion: 1, position: [0, 0], parameters: {} }),
 		continueOnFail: () => false,
-		helpers: { httpRequest: async (req) => { calls.push(req); return { ok: true, model: 'jev', upstreamModel: 'jev-1.13.0', answers: ANSWERS, latency_ms: 700, trial: { calls: 3, used: 1, left: 2 } }; } },
+		getCredentials: async () => ({ apiKey: 'test-key', baseUrl: 'https://api.typesafe.ai' }),
+		helpers: { httpRequestWithAuthentication: async (_type, req) => { calls.push(req); return { model: 'jev-1.13.0', answers: Object.fromEntries(ANSWERS.map((a) => [a.id, { choice: a.value, confidence: a.confidence, probabilities: a.probabilities }])) }; } },
 	};
 }
-const base = { operation: 'ask', connection: 'trial', state: '{"task":"return 4","delivered":"4"}', questions: {}, questionsJson: '[]', routing: '{}', replyLanguage: 'off', failClosed: true, rawOutput: false };
+const base = { operation: 'ask', connection: 'direct', model: 'jev-1.13.0', state: '{"task":"return 4","delivered":"4"}', questions: {}, questionsJson: '[]', routing: '{}', replyLanguage: 'off', failClosed: true, rawOutput: false };
 const node = new TaifoonTypeSafe();
 
 // 1. no Jev options: exactly as before (no jev key, pass)
@@ -30,7 +31,8 @@ const node = new TaifoonTypeSafe();
 // 2. RUBRIC_v1 + record (devnet) + evaluator: asks the four, composes complete → Pass, unsigned calls out
 { const calls = []; const [pass, fail, review] = await node.execute.call(ctx({ ...base, jev: { rubric: true, subject: 'job-7', chainId: 8453, record: 'devnet', evaluator: 'virtuals-erc8183', jobId: '7' } }, calls));
 	assert.deepEqual([pass.length, fail.length, review.length], [1, 0, 0]);
-	assert.deepEqual(calls[0].body.questions.map((q) => q.id), ['spec_met', 'unsupported_claim', 'ending', 'cheat_shaped']);
+	assert.deepEqual(Object.keys(calls[0].body.questions), ['spec_met', 'unsupported_claim', 'ending', 'cheat_shaped']);
+	assert.equal(calls[0].body.model, 'jev-1.13.0');   // pinned, never the moving jev-latest alias by default
 	assert.match(calls[0].body.state, /facts code established before the judge was asked/);
 	const j = pass[0].json.jev;
 	assert.equal(j.verdict, 'complete'); assert.equal(j.receipt.model, 'jev-1.13.0'); assert.equal(j.receipt.inputDigest.length, 66);
@@ -52,4 +54,9 @@ const node = new TaifoonTypeSafe();
 	assert.deepEqual(jevProp.options.map((o) => o.name).sort(), ['chainId', 'evaluator', 'evaluatorAddress', 'factsJson', 'jobId', 'record', 'rubric', 'subject']);
 	assert.equal(jevProp.options.find((o) => o.name === 'record').default, 'none'); assert.equal(jevProp.options.find((o) => o.name === 'rubric').default, false); }
 
-console.log('jev self-test: 5 cases passed');
+// 6. your own key only: a workflow saved with the removed Free Trial connection fails with what to do, and calls no one
+{ const calls = []; await assert.rejects(node.execute.call(ctx({ ...base, connection: 'trial', jev: {} , questionsJson: JSON.stringify([{ id: 'ok', kind: 'noul', text: 'Done?' }]) }, calls)), /removed in 2\.0\.0.*console\.typesafe\.ai/);
+	assert.equal(calls.length, 0);
+	assert.deepEqual(node.description.properties.find((p) => p.name === 'connection').options.map((o) => o.value), ['direct']); }
+
+console.log('jev self-test: 6 cases passed');

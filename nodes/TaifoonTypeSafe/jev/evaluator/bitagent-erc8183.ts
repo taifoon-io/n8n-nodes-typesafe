@@ -1,4 +1,4 @@
-// GENERATED from @taifoon/jev (judge/sdk/src) by judge/sdk/scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
+// GENERATED from @taifoon/jev (src/) by its scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
 // BitAgent / Unibase ERC-8183 (AgenticCommerce on Base; implementation unverified, layout read from its transactions).
 //   seat "job" (default): you are the job's evaluator → AgenticCommerce complete / reject(jobId, digest, 0x), the same
 //     (uint256, bytes32, bytes) layout its submit uses.

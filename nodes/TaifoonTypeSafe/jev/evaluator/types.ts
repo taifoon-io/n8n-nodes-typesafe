@@ -1,4 +1,4 @@
-// GENERATED from @taifoon/jev (judge/sdk/src) by judge/sdk/scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
+// GENERATED from @taifoon/jev (src/) by its scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
 import type { Hex } from '../hash.js';
 
 export type EvaluatorVerdict = 'complete' | 'reject';

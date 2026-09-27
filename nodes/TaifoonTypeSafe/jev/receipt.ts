@@ -1,4 +1,4 @@
-// GENERATED from @taifoon/jev (judge/sdk/src) by judge/sdk/scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
+// GENERATED from @taifoon/jev (src/) by its scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
 // The receipt, built from what is already known — no network. grade() asks Jev and then calls this; the n8n node calls
 // it with the answers its own TypeSafe call returned.
 import { sha256Hex, type Hex } from './hash.js';

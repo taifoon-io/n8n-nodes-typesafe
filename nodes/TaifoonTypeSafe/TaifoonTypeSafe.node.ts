@@ -10,12 +10,10 @@ import { evaluatorCall, type Protocol } from './jev/evaluator/index';
 /**
  * TypeSafe for n8n.
  *
- * One service, TypeSafe, reached two ways:
- *   direct    your own TypeSafe key, straight to api.typesafe.ai. No other account, nothing in the path.
- *   trial     three free calls with no key, funded by Taifoon, so a newcomer can see a real answer first.
+ * One service, TypeSafe, reached one way: your own TypeSafe key, straight to api.typesafe.ai.
+ * No other account, nothing in the path.
  *
- * The translation layer is code that ships inside this node, so it behaves identically on both
- * connections and costs nothing: Translate compiles a plain-language task into typed questions,
+ * The translation layer is code that ships inside this node, so it costs nothing: Translate compiles a plain-language task into typed questions,
  * and Routing turns answers into the Pass / Fail / Review outputs. No dependency, no model call.
  */
 
@@ -32,15 +30,9 @@ function safeError(error: unknown): JsonObject {
 	return { message: `Request failed (${status})`, description: said.replace(REDACT, '$1[redacted]'), httpCode: String(status) };
 }
 
-/** n8n words a 402 as "check your payment details", which is wrong for a free trial and unhelpful for a
- *  rejected key. For the statuses a person can act on, say what to do next. */
-function nextStep(status: number, connection: string): string | undefined {
-	if (connection === 'trial') {
-		if (status === 402) return 'The free calls for this server are used up. Create a TypeSafe API credential with your own key from console.typesafe.ai and switch Connection to "Direct to TypeSafe".';
-		if (status === 413 || status === 400) return 'The free trial takes up to 4 questions and 4,000 characters per call. Send less, or use your own key.';
-		if (status === 429) return 'The free trial is busy. Wait a minute, or use your own key.';
-		return undefined;
-	}
+/** n8n words a 402 as "check your payment details", which is unhelpful for a rejected key or an empty account.
+ *  For the statuses a person can act on, say what to do next. */
+function nextStep(status: number): string | undefined {
 	if (status === 401 || status === 403) return 'TypeSafe rejected the key. Check the TypeSafe API credential: the key may have been rotated or revoked at console.typesafe.ai.';
 	if (status === 402) return 'TypeSafe reports the account has no credit. Top it up at console.typesafe.ai.';
 	return undefined;
@@ -83,13 +75,6 @@ async function withBackoff<T>(node: INode, call: () => Promise<T>): Promise<T> {
 			throw new NodeApiError(node, safeError(error));
 		}
 	}
-}
-
-/** The free trial needs no credential, so it lives outside execute(): n8n's lint (rightly) forbids an
- *  unauthenticated httpRequest inside a function that also reads credentials. */
-const TRIAL_URL = 'https://typesafe.taifoon.dev/v1/trial';
-async function askTrial(ctx: IExecuteFunctions, body: IDataObject): Promise<IDataObject> {
-	return (await ctx.helpers.httpRequest({ method: 'POST', url: TRIAL_URL, body, json: true, timeout: 60000 })) as IDataObject;
 }
 
 /** Jev options (1.5.0): all off by default, so an Ask without them behaves exactly as before. */
@@ -137,9 +122,10 @@ export class TaifoonTypeSafe implements INodeType {
 				] },
 			{ displayName: 'Connection', name: 'connection', type: 'options', default: 'direct', displayOptions: { show: { operation: ['ask'] } },
 				options: [
-					{ name: 'Direct to TypeSafe', value: 'direct', description: 'Your own TypeSafe key. No other account needed.' },
-					{ name: 'Free Trial (3 Calls, No Key)', value: 'trial', description: 'Three real answers with no account and no key, paid for by Taifoon. Up to 4 questions and 4,000 characters per call.' },
+					{ name: 'Direct to TypeSafe', value: 'direct', description: 'Your own TypeSafe key from console.typesafe.ai. No other account needed.' },
 				] },
+			{ displayName: 'Model', name: 'model', type: 'string', default: 'jev-1.13.0', displayOptions: { show: { operation: ['ask'] } },
+				description: 'The TypeSafe model to ask. Pinned by default so the same item gets the same answers over time; enter jev-latest to follow TypeSafe\'s newest model.' },
 			{ displayName: 'Item to Judge', name: 'state', type: 'json', default: '={{ JSON.stringify($json) }}', required: true, displayOptions: { show: { operation: ['ask'] } },
 				description: 'Any JSON or text. The default sends the whole incoming item. Do the arithmetic upstream: the model judges, it does not calculate.' },
 			{ displayName: 'Questions', name: 'questions', type: 'fixedCollection', typeOptions: { multipleValues: true }, default: {}, placeholder: 'Add Question', displayOptions: { show: { operation: ['ask'] } },
@@ -237,7 +223,7 @@ export class TaifoonTypeSafe implements INodeType {
 				const facts = jevOn ? jevFacts(jev.factsJson) : null;
 				const subject = { chainId: Number(jev.chainId ?? 0), ref: String(jev.subject || `n8n-item-${i}`) };
 				// RUBRIC_v1: the facts decide first (a false check rejects and Jev is not asked); Jev reads the evidence + the facts section
-				const input = rubricOn ? inputFor(packOf(state as string | object), facts!, connection === 'trial' ? 4000 : undefined) : null;
+				const input = rubricOn ? inputFor(packOf(state as string | object), facts!) : null;
 				if (rubricOn && RUBRIC_v1.compose(facts!, null).forced === 'hard_fail') {
 					const receipt = buildReceipt({ rubric: RUBRIC_v1, subject, state: input!.state, jevState: input!.jevState, facts: facts!, answers: null, model: null, connection: 'none', caller: 'n8n' });
 					fail.push({ pairedItem: { item: i }, json: { branch: 'fail', jev: await jevOutput(jev, receipt) } });
@@ -264,7 +250,7 @@ export class TaifoonTypeSafe implements INodeType {
 					const base = String(cred.baseUrl || 'https://api.typesafe.ai').replace(/\/$/, '');
 					// a key is only ever sent over TLS: a typo or a pasted http:// address must not leak it
 					if (!/^https:\/\/[^\s/]+/i.test(base)) throw new NodeOperationError(this.getNode(), 'The Base URL in the TypeSafe API credential must start with https://', { itemIndex: i });
-					const req: IHttpRequestOptions = { method: 'POST', url: `${base}/v1/systemone`, body: { model: 'jev-latest', state, questions }, json: true, timeout: 60000 };
+					const req: IHttpRequestOptions = { method: 'POST', url: `${base}/v1/systemone`, body: { model: String(this.getNodeParameter('model', i, 'jev-1.13.0') || 'jev-1.13.0'), state, questions }, json: true, timeout: 60000 };
 					const started = Date.now();
 					const res = (await withBackoff(this.getNode(), () => this.helpers.httpRequestWithAuthentication.call(this, 'taifoonTypeSafeApi', req))) as { model?: string; answers?: Record<string, IDataObject>; usage?: IDataObject };
 					rawRes = res as unknown as IDataObject;
@@ -275,14 +261,9 @@ export class TaifoonTypeSafe implements INodeType {
 						if (q.kind === 'choice') return { id: q.id, kind: q.kind, schema_ok: typeof a.choice === 'string', value: a.choice ?? null, confidence: (a.confidence as number) ?? null, probabilities: a.probabilities } as AnswerLike;
 						return { id: q.id, kind: q.kind, schema_ok: typeof a.score === 'number', value: a.score ?? null, confidence: (a.confidence as number) ?? null, probabilities: a.probabilities, legend: a.legend } as AnswerLike;
 					});
-					meta = { model: res.model ?? 'jev-latest', provider: 'typesafe', connection, latency_ms: Date.now() - started, usage: res.usage ?? {} };
+					meta = { model: res.model ?? String(this.getNodeParameter('model', i, 'jev-1.13.0')), provider: 'typesafe', connection, latency_ms: Date.now() - started, usage: res.usage ?? {} };
 				} else if (connection === 'trial') {
-					const res = await askTrial(this, { state: state as IDataObject, questions: qs.map((q) => ({ id: q.id, kind: q.kind, text: q.text,
-						...(q.kind === 'choice' ? { options: Object.fromEntries(parseOptions(q.options)) } : {}), ...(q.kind === 'score' ? { levels: split(q.levels, /\s*\|\s*/) } : {}),
-						...(q.kind === 'noul' && q.yesMeans?.trim() ? { yes_means: q.yesMeans.trim() } : {}), ...(q.kind === 'noul' && q.noMeans?.trim() ? { no_means: q.noMeans.trim() } : {}) })) });
-					rawRes = res as unknown as IDataObject;
-					answers = (res.answers as unknown as AnswerLike[]) ?? [];
-					meta = { model: res.model, provider: 'typesafe', connection, latency_ms: res.latency_ms, usage: res.usage, trial: res.trial, next: res.next };
+					throw new NodeOperationError(this.getNode(), 'The Free Trial connection was removed in 2.0.0. Create a TypeSafe API credential with your own key from console.typesafe.ai and set Connection to "Direct to TypeSafe".', { itemIndex: i });
 				} else {
 					throw new NodeOperationError(this.getNode(), `Unknown connection: ${connection}`, { itemIndex: i });
 				}
@@ -312,7 +293,7 @@ export class TaifoonTypeSafe implements INodeType {
 					const rubric = rubricOn ? RUBRIC_v1 : defineRubric({ version: 'n8n-routing.v1', questions: qs.map((q) => ({ id: q.id, text: q.text, options: q.kind === 'choice' ? parseOptions(q.options).map(([o]) => o) : q.kind === 'noul' ? ['yes', 'no'] : split(q.levels, /\s*\|\s*/) })),
 						compose: () => { const b = routed?.branch ?? 'pass'; return { verdict: VERDICT_OF[b] ?? 'needs_review', auto: b !== 'review', forced: null, reasons: [`routing branch ${b}`], scores: { spec_met: null, unsupported_claim: null, scope_ok: null, cheat_shaped: null, ending: null, severity: null } }; } });
 					const sent = input ?? { state: packOf(state as string | object), jevState: packOf(state as string | object) };
-					const receipt = buildReceipt({ rubric, subject, state: sent.state, jevState: sent.jevState, facts: facts!, answers: answersOf(asked), model, connection: connection === 'trial' ? 'trial' : 'key', latency_ms: typeof meta.latency_ms === 'number' ? meta.latency_ms : null, caller: 'n8n' });
+					const receipt = buildReceipt({ rubric, subject, state: sent.state, jevState: sent.jevState, facts: facts!, answers: answersOf(asked), model, connection: 'key', latency_ms: typeof meta.latency_ms === 'number' ? meta.latency_ms : null, caller: 'n8n' });
 					jevOut = await jevOutput(jev, receipt);
 				}
 				const byId: IDataObject = {};
@@ -330,7 +311,7 @@ export class TaifoonTypeSafe implements INodeType {
 				if (this.continueOnFail()) { review.push({ json: { error: String((error as Error).message ?? 'request failed').replace(/(apikey_|tfn_live_|Bearer\s+)[A-Za-z0-9_.-]+/g, '$1[redacted]'), branch: 'review' }, pairedItem: { item: i } }); continue; }
 				if (error instanceof NodeOperationError) throw new NodeOperationError(this.getNode(), error.message, { itemIndex: i, description: error.description ?? undefined });
 				const safe = safeError(error);
-				const step = nextStep(Number(safe.httpCode), String(this.getNodeParameter('connection', i, 'direct')));
+				const step = nextStep(Number(safe.httpCode));
 				if (step) throw new NodeOperationError(this.getNode(), step, { itemIndex: i, description: String(safe.description ?? '') });
 				// never the raw HTTP error: it carries request headers, and n8n stores failed executions
 				throw new NodeApiError(this.getNode(), safe, { itemIndex: i });

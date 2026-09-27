@@ -1,4 +1,4 @@
-// GENERATED from @taifoon/jev (judge/sdk/src) by judge/sdk/scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
+// GENERATED from @taifoon/jev (src/) by its scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
 // evaluatorCall(): the one unsigned call that ends a job on the protocol whose evaluator seat you hold.
 // needs_review ends nothing: the job stays held and the call is null — a person, an appeal or the deadline decides.
 import type { Hex } from '../hash.js';

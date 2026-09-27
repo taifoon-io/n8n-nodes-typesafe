@@ -12,8 +12,6 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - run: npm ci
-      - name: Install jev/ too (the root lint ruleset reads its files and must resolve their imports)
-        run: npm ci --prefix jev
       - name: Lint with n8n's community-node ruleset (the scanner runs this same ruleset)
         run: npm run lint
       - run: npm run build
@@ -27,15 +25,3 @@ jobs:
         run: node -e "const p=require('./package.json'); const d=Object.keys(p.dependencies||{}); if(d.length){console.error('run-time dependencies are not allowed:',d); process.exit(1)}"
       - name: The node reads no environment and no file system
         run: "! grep -rnE 'process\\.env|require\\([\"'\\'']fs[\"'\\'']\\)|from [\"'\\'']fs[\"'\\'']|node:fs' nodes credentials"
-  jev:
-    # @taifoon/jev (jev/): typecheck, the golden and recorded-calldata tests, build; and the node's vendored copy is current
-    runs-on: ubuntu-latest
-    defaults: { run: { working-directory: jev } }
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22 }
-      - run: npm ci
-      - run: npm run check
-      - name: No run-time dependencies
-        run: node -e "const d=Object.keys(require('./package.json').dependencies||{}); if(d.length){console.error('run-time dependencies:',d); process.exit(1)}"

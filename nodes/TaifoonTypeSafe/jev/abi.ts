@@ -1,4 +1,4 @@
-// GENERATED from @taifoon/jev (judge/sdk/src) by judge/sdk/scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
+// GENERATED from @taifoon/jev (src/) by its scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
 // The ABI encoding this package needs, and no more: static words (bytes32, uintN, bool, address) and dynamic bytes /
 // string, for calls and for reading the two log events. Checked against viem in test/abi.test.ts.
 import { fromHex, keccakHex, toHex, utf8, type Hex } from './hash.js';

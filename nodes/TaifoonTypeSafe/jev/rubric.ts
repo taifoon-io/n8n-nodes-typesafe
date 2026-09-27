@@ -1,7 +1,7 @@
-// GENERATED from @taifoon/jev (judge/sdk/src) by judge/sdk/scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
+// GENERATED from @taifoon/jev (src/) by its scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
 // RUBRIC_v1: the questions Jev is asked, the thresholds, and the composition. Code decides the facts first; Jev answers
 // a few ATOMIC closed questions (never "is the job good?"); code composes the verdict from both under published
-// thresholds. Byte-for-byte the same rules as the Taifoon judge (judge/src/judge-compose.ts; test/parity.test.ts
+// thresholds. Byte-for-byte the same rules as the hosted Taifoon judge (test/parity.test.ts
 // holds them together), so a receipt made here and one made by the hosted judge hash the same.
 import { sha256Hex, type Hex } from './hash.js';
 

@@ -1,5 +1,37 @@
 # What the translation layer can and cannot do
 
+## The Translate operation, in short
+
+The **Translate** operation turns a sentence into questions:
+
+> *Check if the customer is asking for a refund. Classify the ticket into billing, technical, sales or
+> abuse. Rate the urgency from 1 to 5.*
+
+becomes a yes/no, a pick-one with exactly those four options, and a five-level rating. It runs inside
+the node: no network call, no key, no cost, and the same sentence always gives the same result.
+
+It understands **English, Spanish, German, French, Portuguese, Italian, Polish, Dutch, Russian, Japanese
+and Arabic**, detects the language per sentence, and you can mix them in one task. Anything else still
+works as a yes/no.
+
+**Your language is not here? Please add it.** A language is one small word pack in
+[`nodes/TaifoonTypeSafe/translate.ts`](../nodes/TaifoonTypeSafe/translate.ts): the verbs that mean "pick
+one", the words that mean "rate it", how options are introduced and separated, how a scale is written,
+and a four-level default rubric. No logic changes. Add the pack, add one test sentence to the self-test,
+open a pull request. Native speakers catch what we cannot: we would especially welcome Chinese, Korean,
+Hindi, Turkish, Ukrainian, Swedish, Hebrew and Indonesian, and corrections to the eleven we ship.
+
+It splits a sentence that holds several jobs (*check if it is a refund and rate the urgency*), keeps the levels you
+name (*rate the tone as polite, neutral or rude*) and reads *from 5 to 1* as the 1 to 5 scale. When it cannot do what
+you wrote it says so in `warnings` rather than substituting quietly: a *0 to 10* scale has eleven steps and a rating
+takes at most ten, and *is the customer new or returning?* asked as a yes/no answers whether EITHER holds, not which.
+
+It is deliberately literal. It will not invent categories you did not name: *"classify this ticket"*
+with no list comes back flagged `needs_input`. It suggests thresholds but never applies them for you,
+for the reason in [Backward: answers become branches](#backward-answers-become-branches-the-routing-map-on-ask).
+
+## The rules in full
+
 **Languages:** English, Spanish, German, French, Portuguese, Italian, Polish, Dutch, Russian, Japanese, Arabic. The tables below show the English words; every language has the equivalent pack in `translate.ts`. European packs match whole words (Unicode-aware, so accents are safe). Japanese and Arabic match anywhere, because Japanese has no spaces between words and Arabic attaches particles; for the same reason a one-letter particle is never used as a marker. A colon, in any language, always starts the option list.
 
 The node sits between a workflow, which speaks JSON items and branches, and a System One model, which

@@ -1,22 +1,12 @@
 # TypeSafe for n8n
 
-> **Publish mirror.** The source of this package moved to `taifoon-io/taifoon-agents` (private), directory
-> `judge/n8n-typesafe`, on 2026-09-27. This public repository is the publish mirror that npm provenance and the n8n
-> community listing point at; it is updated from there.
+An n8n community node for structured decisions with [TypeSafe's Jev](https://docs.typesafe.ai/introduction), a
+System One model. Ask Noul (yes/no), Choice (pick one) and Score (rate it) questions about any item. Every answer
+carries a probability. The node routes each item to **Pass**, **Fail** or **Review**, so uncertain cases go to a
+person instead of going wrong quietly.
 
-Most automations have a moment where someone has to *decide*: is this a refund request, which team
-gets this ticket, how urgent is it, is this invoice a duplicate. Today you either write brittle rules
-for that, or you ask a chat model and then fight with its prose: parse the answer, handle the day it
-says "It depends", pay for a paragraph you throw away.
-
-This node does the deciding and nothing else. You hand it an item and a few questions. It hands back
-answers your workflow can branch on directly, with a probability attached, usually in well under a
-second and for about two thousandths of a cent.
-
-It works by calling [TypeSafe's Jev](https://docs.typesafe.ai/introduction), a model built to make
-decisions rather than write text. You need a TypeSafe API key, which you get from
-[console.typesafe.ai](https://console.typesafe.ai). That is the only account involved: the node talks
-to TypeSafe directly, and nobody else, including us, is in the path.
+Use it to route tickets, classify rows, guard an LLM's input or output, or gate an agent's tool call for approval.
+It is not for writing text, summarising, or reasoning about code.
 
 ```
 item ──► TypeSafe ──► Pass      confident, and it cleared your thresholds
@@ -24,83 +14,16 @@ item ──► TypeSafe ──► Pass      confident, and it cleared your thres
                  └──► Review    unsure, or the answer did not validate: send this to a person
 ```
 
-## The idea: three systems, each doing the one thing it is good at
-
-```
-   n8n                      Taifoon                         TypeSafe
-   the workflow             the coordination layer          the judge
-   ─────────────            ──────────────────────          ─────────
-   gathers the item    ──►  turns your words into      ──►  answers each question
-   runs the branches        typed questions                 with a probability
-        ▲                   turns the answers back    ◄──
-        └────────────────   into Pass / Fail / Review,
-                            and into sentences in the
-                            asker's own language
-```
-
-- **n8n** is where your process already lives: the triggers, the data, the people who get notified.
-  It is good at moving things and bad at judgment.
-- **TypeSafe** is a model that only judges. It cannot write an essay, which is the point: it returns
-  a number you can threshold, quickly and cheaply, instead of prose you have to interpret.
-- **Taifoon's part is the layer between them**, and it is plain code that ships inside this node. Going
-  in, it compiles what you mean ("is this a refund?") into the three question types the model
-  understands. Coming out, it compiles the model's probabilities into the only three things a workflow
-  can act on: go ahead, do not, or ask a human. Every threshold in that step is yours and sits on the
-  canvas where you can see it. And when a person is waiting on the other end, it says the answers back
-  as sentences in the language they wrote in.
-
-Why three outputs and not two: a yes/no forces a confident answer even when the model is guessing, and
-that is how automations go wrong silently. **Review** is the honest third option. It is where the
-low-confidence cases and the malformed answers go, so a person sees exactly the items that need one.
-
-## Who this is for
-
-- **Support and ops teams** routing tickets, emails and alerts without maintaining a wall of IF nodes.
-- **Anyone putting an LLM in a workflow** who wants a cheap, fast guard in front of it or behind it:
-  is this input safe, is this output on topic, does it contain personal data.
-- **Builders of data pipelines** who need to classify, de-duplicate or score thousands of rows and
-  cannot afford, or wait for, a chat model on each one.
-- **People who do not trust a yes/no without a number.** Every answer comes with how sure the model
-  is, so the uncertain cases go to a human instead of going wrong quietly.
-
-It is not for writing text, summarising, or reasoning about code. We measured that honestly; see
-[What it is good and bad at](#what-it-is-good-and-bad-at).
-
-## Three kinds of question
-
-| You ask | You get back | Think of it as |
-|---|---|---|
-| **Yes / no** ("Noul") | `p`, the probability the statement is true | an IF with a dial |
-| **Pick one** ("Choice") | the option, a probability for every option, and a `confidence` | a Switch that knows when it is guessing |
-| **Rate it** ("Score") | a level on a rubric you write, and a `confidence` | a ranking you can threshold |
-
-Two things make the answers sharper, and both are optional:
-
-- **Describe the options.** Write `billing = payments and refunds; technical = bugs and outages; other = fits none`.
-  The descriptions go to the model and are what separates options that sound alike. Add an `other`: a message
-  that fits nowhere is then answered *other* with confidence, instead of being forced into a team.
-- **Say what yes and no mean.** A yes/no question has *Yes Means* and *No Means* fields for where the line is.
-
-Ask all the questions that might matter in the same node. They are answered at once and independently,
-so ten questions cost about the same as one.
-
 ## Install
 
 In self-hosted n8n: **Settings → Community Nodes → Install**, then enter `@taifoon/n8n-nodes-typesafe`.
 
-**No key yet?** Pick the **Free Trial** connection: three real answers with no account and no key, on us
-(up to 4 questions and 4,000 characters per call). It exists so you can see a real result before signing
-up anywhere.
+Get a TypeSafe API key from [console.typesafe.ai](https://console.typesafe.ai) and create a
+**TypeSafe API** credential. The test button makes one tiny real call, so you know at once whether the key works.
+The node talks to TypeSafe directly with your key, and nobody else, including us, is in the path.
 
-When you are ready, create a **TypeSafe API** credential and paste your key. The test button makes one tiny real call, so
-you find out immediately whether the key works. Running n8n for a team? You can provision the key from a
-secrets file so nobody ever sees it: [Supplying keys securely](docs/SECURE_KEYS.md).
-
-**Upgrading from 1.1 or earlier?** The credential type was renamed (from `typeSafeApi` to
-`taifoonTypeSafeApi`) so it cannot collide with other TypeSafe packages or a future built-in node. After
-updating, create the **TypeSafe API** credential again and select it in your TypeSafe nodes. Nothing else
-changed. If you pre-fill credentials from a file, use the new name as the key
-([Supplying keys securely](docs/SECURE_KEYS.md)).
+Running n8n for a team? [Supply the key from a secrets file](docs/SECURE_KEYS.md). Upgrading from 1.1 or
+earlier? The credential type was renamed: [Upgrading](docs/UPGRADING.md).
 
 ## Try it in two minutes
 
@@ -117,260 +40,55 @@ changed. If you pre-fill credentials from a file, use the new name as the key
 
 Ready-made versions are in [`examples/`](examples).
 
-## Do not want to write the questions? Describe the job
+## Three kinds of question
 
-The **Translate** operation turns a sentence into questions:
-
-> *Check if the customer is asking for a refund. Classify the ticket into billing, technical, sales or
-> abuse. Rate the urgency from 1 to 5.*
-
-becomes a yes/no, a pick-one with exactly those four options, and a five-level rating. It runs inside
-the node: no network call, no key, no cost, and the same sentence always gives the same result.
-
-It understands **English, Spanish, German, French, Portuguese, Italian, Polish, Dutch, Russian, Japanese
-and Arabic**, detects the language per sentence, and you can mix them in one task. Anything else still
-works as a yes/no.
-
-**Your language is not here? Please add it.** A language is one small word pack in
-[`nodes/TaifoonTypeSafe/translate.ts`](nodes/TaifoonTypeSafe/translate.ts): the verbs that mean "pick
-one", the words that mean "rate it", how options are introduced and separated, how a scale is written,
-and a four-level default rubric. No logic changes. Add the pack, add one test sentence to the self-test,
-open a pull request. Native speakers catch what we cannot: we would especially welcome Chinese, Korean,
-Hindi, Turkish, Ukrainian, Swedish, Hebrew and Indonesian, and corrections to the eleven we ship.
-
-It splits a sentence that holds several jobs (*check if it is a refund and rate the urgency*), keeps the levels you
-name (*rate the tone as polite, neutral or rude*) and reads *from 5 to 1* as the 1 to 5 scale. When it cannot do what
-you wrote it says so in `warnings` rather than substituting quietly: a *0 to 10* scale has eleven steps and a rating
-takes at most ten, and *is the customer new or returning?* asked as a yes/no answers whether EITHER holds, not which.
-
-It is deliberately literal. It will not invent categories you did not name: *"classify this ticket"*
-with no list comes back flagged `needs_input`. It suggests thresholds but never applies them for you,
-for the reason in the next section.
-
-## Answering people in their own language
-
-Branches are for workflows. When a person is waiting for the answer (a support chat, a Telegram bot, a
-trading assistant), `{"noul": 0.97}` is no use to them. Set **Reply Language** on the Ask operation and
-the output gains a `reply`:
-
-```json
-{ "lang": "de", "flagHuman": true,
-  "text": "Prüfe, ob die Volatilität ungewöhnlich hoch ist. Ja (94 % sicher)\n? Bewerte die Dringlichkeit ... Vermutlich 4 (4 von 5), aber unsicher (36 %)\nNicht sicher genug: Ich gebe das an einen Menschen weiter.",
-  "lines": [{ "id": "...", "question": "...", "answer": "...", "outcome": "review" }], "verdict": "..." }
-```
-
-- **Match Questions** answers in the language the questions were written in, so one workflow serves
-  every customer. Or pin a language: English questions, Polish answers.
-- It is templates, not a model: free, offline, and the same answers always read the same. The person's
-  own sentence, options and rubric levels are echoed exactly as they wrote them; only the glue around
-  them is translated, so nothing is paraphrased and nothing is invented.
-- It never rounds doubt away. A coin-flip reads as *hard to say*, not yes. A rating the model is spread
-  across reads as *probably 4, but not sure*. And when anything went to Review, `flagHuman` is true and the
-  last line says a person is taking over. Wire that to a person, do not soften it.
-
-The same eleven languages as Translate, and the same request: a voice is one row of thirteen short
-strings in [`translate.ts`](nodes/TaifoonTypeSafe/translate.ts). Native speakers, please correct ours.
-
-## Raw output: the model's own numbers, untouched
-
-Everything above — Routing, Reply, the per-question shaping — is this node interpreting the answer for
-you. When you would rather do that yourself, turn on **Raw Output** on the Ask operation. The node then
-returns the API's answer *exactly as TypeSafe sent it*, with none of its interpretation:
-
-```json
-{ "model": "jev-latest", "provider": "typesafe", "connection": "direct", "latency_ms": 812,
-  "usage": { "input_tokens": 545 },
-  "raw": { "model": "jev-latest",
-    "answers": {
-      "is_refund":   { "noul": 0.98 },
-      "urgency":     { "score": 3.6, "confidence": 0.41, "probabilities": [ ... ], "legend": [ ... ] },
-      "which_lane":  { "choice": "billing", "confidence": 0.77, "probabilities": { "billing": 0.77, "shipping": 0.19, "other": 0.04 } }
-    } } }
-```
-
-- **No Routing, no Reply, no reshaping.** `raw` is the whole `{answers, model, usage}` object the model
-  returned. The probabilities, confidences and `noul`/`score`/`choice` values are the model's own — this
-  is the `--raw` form for when you want the raw calibration to feed your own logic, a training set, or a
-  model that learns from Jev's best cases.
-- **Everything flows on the first output.** The fail/review outputs are a Routing feature, and Routing
-  is skipped in raw mode, so nothing is split off.
-- Works on both connections (your key and the free trial). `Fail Closed` still applies before the raw
-  object is emitted, so a malformed answer still stops the item unless you turn it off.
-
-## Grade a job with Jev, and put it on chain (Jev Options, 1.5.0)
-
-For agent jobs with an escrow and an evaluator seat, the Ask operation has **Jev Options**. All of them are off by
-default, and without them the node behaves exactly as 1.4.0.
-
-- **Ask RUBRIC_v1** adds the four questions of the published rubric: spec_met, unsupported_claim, ending and
-  cheat_shaped. Jev reads the item, then a section listing the facts your workflow established. The node composes
-  **complete / reject / needs_review** under THRESHOLDS_v1 and routes them to Pass / Fail / Review.
-- **Facts (JSON)** holds the checks you already made, e.g. `{"delivered": true, "checks": {"proof_verifies": true}}`.
-  A false check rejects on Fail, and Jev is not asked.
-- **Record On** (`none`, `devnet`, `base`, `both`) adds the unsigned calls that record the receipt on JevAnswerLog
-  and JevDecisionLog. On devnet 36927 the calls carry the logs' addresses. In this version the Base calls carry
-  `to: null`.
-- **Evaluator Call**, **Job ID** and **Evaluator Address** add the one unsigned call that ends the job as its
-  evaluator. The protocols are Virtuals ERC-8183, Virtuals memo-ACP, BitAgent ERC-8183, an assurance hook or the judge
-  adapter. For needs_review the call is `null`.
-
-The output carries `jev: { verdict, reasons, receiptHash, decisionDigest, answersDigest, record?, evaluator?, receipt }`.
-Nothing is signed or sent: a signer node or your wallet does that. The same code, with its tests against real
-transactions, is the standalone package [`@taifoon/jev`](jev/README.md).
-
-## n8n verification (Creator Portal) — status
-
-| Requirement | Status | Proof |
+| You ask | You get back | Think of it as |
 |---|---|---|
-| Public source repository | done | this repository, `taifoon-io/n8n-nodes-typesafe` (public) |
-| No run-time dependencies; no environment or file-system access in `nodes/` and `credentials/` | done | `ci.yml` checks both on every push |
-| Lint with n8n's community-node ruleset | done | `npm run lint` in `ci.yml` and `publish.yml` |
-| `author.email` is a real mailbox (n8n sends the ownership token there) | done | `publish.yml` refuses a noreply address |
-| npm publish with provenance from GitHub Actions | done | 1.4.0 carries an SLSA provenance attestation ([npm](https://www.npmjs.com/package/@taifoon/n8n-nodes-typesafe)); release run [35778144807](https://github.com/taifoon-io/n8n-nodes-typesafe/actions/runs/35778144807) |
-| n8n's community-package scanner passes on the published package | done | the same run's scanner step (success) |
-| Submission on [creators.n8n.io](https://creators.n8n.io) | **not submitted** | needs the npm package owner (`taifoon`) to sign in and submit `@taifoon/n8n-nodes-typesafe` |
+| **Yes / no** ("Noul") | `p`, the probability the statement is true | an IF with a dial |
+| **Pick one** ("Choice") | the option, a probability for every option, and a `confidence` | a Switch that knows when it is guessing |
+| **Rate it** ("Score") | a level on a rubric you write, and a `confidence` | a ranking you can threshold |
 
-## Basic trading tasks, with gates
+Describe the options, and add an `other`, to sharpen a Choice. Ask every question that might matter in one node:
+they are answered at once and independently, so ten cost about the same as one.
 
-A worked example of the whole loop on something less forgiving than support tickets. These are real:
-live 5-minute candles, the real model, run on 2026-09-21. A program computed the facts first
-(averages, ranges, volatility ratios, whether the New York morning session is open); each task is
-written the way a person would type it, one per language; the gates are plain thresholds in code.
+## What you must know
 
-**A pre-trade entry gate, in English** (NQ, 798 ms, left by **Fail**)
-
-> Check if price is above its 20-bar average. Check if the last hour's move is larger than usual for this market. Classify the market into trending up, trending down or ranging. Rate how stretched price is from its average from 1 to 5.
-
-| compiled to | gate |
-|---|---|
-| noul | `gte` 0.7 |
-| noul | `lte` 0.5 |
-| choice | `minConfidence` 0.6, `in` trending up |
-| score | `max` 2 |
-
-```
-✓ Check if price is above its 20-bar average. Yes (99% sure)
-✗ Check if the last hour's move is larger than usual for this market. Yes (94% sure)
-✓ Classify the market into trending up, trending down or ranging. trending up (86% confident)
-✓ Rate how stretched price is from its average from 1 to 5. 2 (2 of 5), 55% confident
-At least one check did not pass.
-```
-
-The second check failed on purpose: the gate wants a calm last hour (`lte 0.5`) and the hour was not calm.
-That is a gate doing its job, not the model being wrong.
-
-**A pre-trade order sanity check, in Japanese** (BTC, 301 ms, left by **Review**)
-
-> この注文の数量は通常より異常に大きいですか。指値は現在の価格から大きく離れていますか。この注文を次のいずれかに分類してください：通常、要確認、誤発注の疑い。
-
-| compiled to | gate |
-|---|---|
-| noul | `lte` 0.3 |
-| noul | `lte` 0.3 |
-| choice | `minConfidence` 0.6, `in` 通常 |
-
-```
-✓ この注文の数量は通常より異常に大きいですか。 いいえ（確信度86%）
-✓ 指値は現在の価格から大きく離れていますか。 いいえ（確信度94%）
-? この注文を次のいずれかに分類してください：通常、要確認、誤発注の疑い。 おそらく通常ですが、確信はありません（46%）
-確信が足りないため、担当者に確認を依頼します。
-```
-
-Both yes/no checks passed, but the model would not commit to a category, so the order goes to a person.
-That is what Review is for. (The order is a sample ticket measured against the real last price.)
-
-**An exit guard, in German** (BTC, 663 ms, left by **Review**)
-
-> Prüfe, ob der Kurs unter dem 20-Perioden-Durchschnitt liegt. Prüfe, ob die Volatilität ungewöhnlich hoch ist. Bewerte die Dringlichkeit, eine Long-Position zu verkleinern, von 1 bis 5.
-
-| compiled to | gate |
-|---|---|
-| noul | reported, not gated |
-| noul | reported, not gated |
-| score | `min` 3, `minConfidence` 0.5 |
-
-```
-Prüfe, ob der Kurs unter dem 20-Perioden-Durchschnitt liegt. Nein (99 % sicher)
-Prüfe, ob die Volatilität ungewöhnlich hoch ist. Ja (94 % sicher)
-? Bewerte die Dringlichkeit, eine Long-Position zu verkleinern, von 1 bis 5. Vermutlich 4 (4 von 5), aber unsicher (36 %)
-Nicht sicher genug: Ich gebe das an einen Menschen weiter.
-```
-
-A rating is a centre of mass. Without `minConfidence` this one would have cleared `min 3` while the model
-was only about a third sure. We found that in this very run, which is why a rating gate can now ask for
-confidence too.
-
-All eleven languages, with the facts the model was shown: [docs/TRADING_GATES.md](docs/TRADING_GATES.md).
-Across the run, 11 of 11 languages were detected, the model's reading of the first fact matched plain code in
-11 of 11, the median call took 295 ms, and all 11 calls together cost 0.000331 USD.
-
-**What this is not.** These gates describe and guard a state a program has already measured. They do not
-forecast. We tested that hard: six pre-registered trials on these same markets, and no model (this one,
-Claude, or our own) forecast direction. A model in a trading loop supplies judgment about *now*; it does
-not create an edge, and a strategy without one loses faster with a model in it. Keep the arithmetic, the
-thresholds and every veto in code.
-
-## The one rule about routing
-
-An item leaves by **Pass** only if *every* question you put in Routing passed. So only route the
-questions you actually want to gate on. If you route `urgency` as well, a perfectly good refund ticket
-"fails" just because it is not urgent. We made exactly that mistake while building this.
-
-| Question | Routing keys | What happens |
-|---|---|---|
-| Yes / no | `gte`, `lte` on `p` | pass or fail |
-| Pick one | `minConfidence`, and `in` for the options you accept | below the confidence → **Review** |
-| Rate it | `min`, `max` on the level, and optionally `minConfidence` | pass or fail; below the confidence → **Review** |
-
-A mistake in Routing never reads as a pass. A rule that names a question you did not ask (a typo, a renamed ID), a
-yes/no rule with no threshold, or a confidence bar on an answer that carries no confidence all send the item to
-**Review**, with the reason in `decisions`.
-
-Two details: a rating is a **zero-based level number** (0 is your first level; every answer includes a
-`legend`), and an answer that does not validate always goes to Review. Nothing fails open.
-
-## What it is good and bad at
-
-We benchmarked it against Claude Sonnet, and the results are mixed in a useful way:
-
-- **Answering a real system's yes/no checks:** it matched or beat Sonnet on every decision.
-- **Forecasting next-day rain from two days of weather:** a tie (81% against 78%), and neither clearly
-  beat the naive "same as today".
-- **Judging claims about small Python functions:** Sonnet got 100%, this got 83%. It is not a code
-  reasoner.
-
-In all three it was about **ten times faster and a thousand times cheaper**. Its raw probabilities were
-the less well calibrated of the two, which is the practical reason to **fit your thresholds on a few
-dozen of your own labelled items** before trusting them.
-
-## Habits that keep it reliable
-
+- **Route only what you gate on.** An item leaves by **Pass** only if *every* routed question passed. Route
+  `urgency` too, and a good refund ticket "fails" for not being urgent.
+- **Nothing fails open.** A Routing mistake, or an answer that does not validate, sends the item to **Review**.
+- **A rating is a zero-based level number.** 0 is your first level; every answer includes a `legend`.
+- **Fit thresholds on your own items.** Label a few dozen before you trust them. The raw probabilities are
+  not calibrated on your data.
 - **Calculate first, then ask.** Do arithmetic in a Code node. Ask the model for judgment, never a sum.
-- **One thing per question.** If a question weighs several factors, split it and combine the answers
-  yourself, with weights you can see.
-- **Keep thresholds on the canvas,** where they can be reviewed and changed, not inside a prompt.
-- **Leave Fail Closed on.** A malformed answer stops the item instead of flowing on as an empty value.
-- **Remember what n8n stores.** By default n8n keeps every execution's data. If your items contain
-  personal data, set `EXECUTIONS_DATA_SAVE_ON_SUCCESS=none` on your instance. This node never writes
-  your key into an execution record, including when a request fails.
+- **Leave Fail Closed on.** A malformed answer then stops the item instead of flowing on as an empty value.
 
-## Cost and limits
+Cost: about 0.6 to 0.8 s and 450 input tokens for three questions. TypeSafe charges 0.042 USD per million input
+tokens and nothing for output: roughly 0.00002 USD per item. Input is text or JSON; no images or audio.
 
-About 0.6 to 0.8 s and 450 input tokens for three questions. TypeSafe charges 0.042 USD per million
-input tokens and nothing for output: roughly 0.00002 USD per item. Rate limits and overload responses
-are retried with backoff. Input is text or JSON; no images or audio.
+## More operations and options
 
-## More
+- **Translate** turns a sentence into questions, in eleven languages, offline and free.
+  [How Translate works](docs/TRANSLATION.md)
+- **Reply Language** says the answers back as sentences in the asker's language. **Raw Output** returns
+  TypeSafe's answer untouched. [Reply and Raw Output](docs/OUTPUTS.md)
+- **Jev Options** grade an agent job under RUBRIC_v1 and return unsigned on-chain calls.
+  [Jev Options](docs/JEV_OPTIONS.md), and the standalone package [`@taifoon/jev`](https://github.com/taifoon-io/jev).
 
-[TypeSafe over MCP, and an approval gate for agent tool calls](docs/MCP.md) ·
-[Supplying keys securely](docs/SECURE_KEYS.md) · [Workflow patterns](docs/WORKFLOWS.md) ·
-[How Translate works, rule by rule](docs/TRANSLATION.md) · [Trading gates in eleven languages](docs/TRADING_GATES.md) · [Key policy and rotation](docs/KEY_POLICY.md)
+## Documentation
+
+- [How it works, and who it is for](docs/HOW_IT_WORKS.md)
+- [Routing, reliability, cost and benchmark](docs/RELIABILITY.md)
+- [Workflow patterns](docs/WORKFLOWS.md)
+- [TypeSafe over MCP, and an approval gate for agent tool calls](docs/MCP.md)
+- [Basic trading tasks, with gates](docs/TRADING_EXAMPLES.md) and [in eleven languages](docs/TRADING_GATES.md)
+- [Supplying keys securely](docs/SECURE_KEYS.md) · [Key policy and rotation](docs/KEY_POLICY.md)
 
 This package integrates one service: TypeSafe. It is published from GitHub Actions with an npm provenance
 statement, and every release must pass n8n's community-package scanner.
 
-
 ## Licence
+
+Independent project. Jev and TypeSafe are products of TypeSafe AI, Inc., which does not endorse this package.
 
 MIT. An independent community node by [Taifoon](https://github.com/taifoon-io). TypeSafe and Jev are
 trademarks of TypeSafe AI; this project is not affiliated with or endorsed by TypeSafe AI.

@@ -1,4 +1,4 @@
-// GENERATED from @taifoon/jev (judge/sdk/src) by judge/sdk/scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
+// GENERATED from @taifoon/jev (src/) by its scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
 // The two records a grade leaves, in the formats the on-chain logs already hold:
 //   decision.v2   — what was DECIDED: kind, subject, every answer with its question and distribution, model, and the
 //                   sha256 of the exact text Jev read. JevDecisionLog.record(subject, kind, digest, confidenceBps, …).

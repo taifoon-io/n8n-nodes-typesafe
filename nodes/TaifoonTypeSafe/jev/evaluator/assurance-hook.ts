@@ -1,4 +1,4 @@
-// GENERATED from @taifoon/jev (judge/sdk/src) by judge/sdk/scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
+// GENERATED from @taifoon/jev (src/) by its scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
 // An assurance hook (the AssuranceHook family: Taifoon's, Moonbeam's on Base). The job's evaluator — or its buyer —
 // ends it: complete(jobId) pays the seller; reject(jobId, digest) walks every party back and records the digest.
 import { encodeCall } from '../abi.js';

@@ -1,4 +1,4 @@
-// GENERATED from @taifoon/jev (judge/sdk/src) by judge/sdk/scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
+// GENERATED from @taifoon/jev (src/) by its scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
 // Virtuals ERC-8183 (AgenticCommerceV3 on Base). When the job names you as its evaluator you end it:
 // complete(jobId, reason, optParams) or reject(jobId, reason, optParams). `reason` is a bytes32 — the decision digest.
 import { encodeCall } from '../abi.js';

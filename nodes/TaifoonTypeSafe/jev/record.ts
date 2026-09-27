@@ -1,4 +1,4 @@
-// GENERATED from @taifoon/jev (judge/sdk/src) by judge/sdk/scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
+// GENERATED from @taifoon/jev (src/) by its scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
 // record(): the unsigned calls that put a receipt's digests on chain — JevAnswerLog.record (jev.answer.v1) and
 // JevDecisionLog.record (decision.v2). `network` is a flag: none | devnet | base | both. Nothing here signs: pass `send`
 // (your wallet, e.g. viem's walletClient.sendTransaction) to send the calls that have an address, or hand them on.

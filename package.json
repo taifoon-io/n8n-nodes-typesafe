@@ -1,17 +1,23 @@
 {
   "name": "@taifoon/n8n-nodes-typesafe",
-  "version": "1.5.0",
-  "description": "TypeSafe for n8n: ask Jev (a System One model) yes/no, pick-one and rate-it questions about any workflow item and route on calibrated answers. Works directly with your own TypeSafe key; includes a task-to-questions translator and Pass / Fail / Review outputs.",
+  "version": "2.0.0",
+  "description": "n8n community node for TypeSafe System One (Jev): ask Noul, Choice and Score questions about any item, branch on calibrated probabilities, and send low-confidence answers to human review.",
   "keywords": [
     "n8n-community-node-package",
+    "n8n",
     "typesafe",
+    "typesafe-ai",
     "jev",
     "system-one",
-    "taifoon",
-    "decision",
     "classification",
     "routing",
-    "ai"
+    "structured-output",
+    "confidence",
+    "human-in-the-loop",
+    "approval",
+    "guardrail",
+    "ai-agent",
+    "decision"
   ],
   "license": "MIT",
   "homepage": "https://github.com/taifoon-io/n8n-nodes-typesafe#readme",

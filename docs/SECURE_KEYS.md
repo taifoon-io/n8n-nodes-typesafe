@@ -56,8 +56,8 @@ and gain nothing.
 
 ## Never send us a key
 
-You do not need to give Taifoon a TypeSafe key, ever. On the direct connection we are not in the path,
-and the free trial uses our key, not yours. There is deliberately no form, email address or chat
+You do not need to give Taifoon a TypeSafe key, ever. The node sends your key to TypeSafe and to
+no one else, so we are never in the path. There is deliberately no form, email address or chat
 where we accept keys. If anyone asks you for one in our name, it is not us.
 
 If two organisations ever must hand a secret to each other, do it with public-key encryption to the

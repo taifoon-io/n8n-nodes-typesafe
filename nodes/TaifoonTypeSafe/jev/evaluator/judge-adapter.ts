@@ -1,4 +1,4 @@
-// GENERATED from @taifoon/jev (judge/sdk/src) by judge/sdk/scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
+// GENERATED from @taifoon/jev (src/) by its scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
 // JudgeAdapter: the evaluator seat between a judge and an assurance hook. postVerdict(jobId, 1 Conformant | 2
 // NonConformant, mode 2 calibrated, digest) stores the verdict once per job and calls hook.complete / hook.reject in the
 // same transaction, so the adapter's VerdictPosted, the hook's event and the decision record carry one digest.

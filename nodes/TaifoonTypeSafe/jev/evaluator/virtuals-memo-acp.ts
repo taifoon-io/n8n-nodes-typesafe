@@ -1,4 +1,4 @@
-// GENERATED from @taifoon/jev (judge/sdk/src) by judge/sdk/scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
+// GENERATED from @taifoon/jev (src/) by its scripts/vendor-n8n.mjs. Do not edit here: edit the SDK and re-run.
 // Virtuals memo-ACP (ACPRouter on Base). The evaluator ends a job by signing its evaluation memo:
 // signMemo(memoId, isApproved, reason). Pass the memo id as the job id; the reason carries the verdict and the digest.
 import { encodeCall } from '../abi.js';
