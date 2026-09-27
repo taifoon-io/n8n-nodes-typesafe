@@ -15,6 +15,8 @@ jobs:
       - name: Lint with n8n's community-node ruleset (the scanner runs this same ruleset)
         run: npm run lint
       - run: npm run build
+      - name: Every example workflow runs end to end (TypeSafe stubbed) and routes to the right exit
+        run: npm test
       - name: Translator self-test (eleven languages, both directions)
         run: npx --yes tsx nodes/TaifoonTypeSafe/translate.selftest.mjs
       - name: Jev options self-test (offline, against the built node)

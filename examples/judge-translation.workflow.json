@@ -1,0 +1,161 @@
+{
+  "name": "Check a translation keeps its meaning (Jev judge)",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Replace with your strings.\nreturn [{ json: {\n  source_text: 'Refunds are processed within 14 days of receiving the returned item.',\n  translation: 'Rückerstattungen werden innerhalb von 14 Tagen nach Eingang des zurückgesandten Artikels bearbeitet.',\n  target_language: 'German',\n} }];"
+      },
+      "name": "Source and translation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "ask",
+        "connection": "direct",
+        "model": "jev-1.13.0",
+        "questions": {},
+        "questionsJson": "[{\"id\":\"meaning_kept\",\"kind\":\"noul\",\"text\":\"Does the translation say the same thing as the source text, with nothing changed?\"},{\"id\":\"added_or_dropped\",\"kind\":\"noul\",\"text\":\"Does the translation add or drop any fact, number or condition?\"}]",
+        "routing": "{\"meaning_kept\":{\"gte\":0.8},\"added_or_dropped\":{\"lte\":0.2}}",
+        "replyLanguage": "off",
+        "failClosed": true,
+        "state": "={{ JSON.stringify($json) }}"
+      },
+      "name": "TypeSafe",
+      "type": "@taifoon/n8n-nodes-typesafe.taifoonTypeSafe",
+      "typeVersion": 1,
+      "position": [
+        480,
+        420
+      ],
+      "credentials": {
+        "taifoonTypeSafeApi": {
+          "id": "",
+          "name": "TypeSafe API (your key from console.typesafe.ai)"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "name": "Publish",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        760,
+        240
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "Send back to the translator",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        760,
+        420
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "A reviewer checks it",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        760,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Catch translations that change the meaning\n\nTypeSafe (Jev) compares source and translation: is the meaning kept, is any fact or number added or dropped. Only a clean translation publishes by itself.\n\nYour own TypeSafe key only.",
+        "width": 460,
+        "height": 220
+      },
+      "name": "How it works",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        40
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Source and translation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Source and translation": {
+      "main": [
+        [
+          {
+            "node": "TypeSafe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TypeSafe": {
+      "main": [
+        [
+          {
+            "node": "Publish",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send back to the translator",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "A reviewer checks it",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "Localisation"
+    },
+    {
+      "name": "Judge"
+    }
+  ]
+}

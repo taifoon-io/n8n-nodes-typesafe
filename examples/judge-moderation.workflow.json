@@ -1,0 +1,166 @@
+{
+  "name": "Moderate posts against your own rules (Jev judge)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "moderate",
+        "options": {}
+      },
+      "name": "New post",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        420
+      ],
+      "webhookId": "moderate"
+    },
+    {
+      "parameters": {
+        "jsCode": "// POST { post }. Your rules, in your words: each one becomes a yes/no question.\nconst post = ($input.first().json.body || {}).post || 'Selling my old bike, DM me. Also here is my neighbour\\'s phone: 0171 555 0199';\nreturn [{ json: { post, rules: '1. No spam or ads outside the market channel. 2. No harassment. 3. No one else\\'s personal data.' } }];"
+      },
+      "name": "Post and rules",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "ask",
+        "connection": "direct",
+        "model": "jev-1.13.0",
+        "questions": {},
+        "questionsJson": "[{\"id\":\"spam\",\"kind\":\"noul\",\"text\":\"Is the post spam or an advert?\"},{\"id\":\"harassment\",\"kind\":\"noul\",\"text\":\"Does the post harass or insult someone?\"},{\"id\":\"personal_data\",\"kind\":\"noul\",\"text\":\"Does the post share another person's personal data?\"}]",
+        "routing": "{\"spam\":{\"lte\":0.2},\"harassment\":{\"lte\":0.2},\"personal_data\":{\"lte\":0.2}}",
+        "replyLanguage": "off",
+        "failClosed": true,
+        "state": "={{ JSON.stringify($json) }}"
+      },
+      "name": "TypeSafe",
+      "type": "@taifoon/n8n-nodes-typesafe.taifoonTypeSafe",
+      "typeVersion": 1,
+      "position": [
+        480,
+        420
+      ],
+      "credentials": {
+        "taifoonTypeSafeApi": {
+          "id": "",
+          "name": "TypeSafe API (your key from console.typesafe.ai)"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "name": "Publish",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        760,
+        240
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "Remove, with the rule it broke",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        760,
+        420
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "A moderator decides",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        760,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Moderate with your rules, not a black box\n\nEach rule is one yes/no question with a probability. A post that clearly breaks a rule is removed with the rule named; a clean one publishes; anything unsure goes to a moderator.\n\nYour own TypeSafe key only.",
+        "width": 460,
+        "height": 240
+      },
+      "name": "How it works",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        40
+      ]
+    }
+  ],
+  "connections": {
+    "New post": {
+      "main": [
+        [
+          {
+            "node": "Post and rules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post and rules": {
+      "main": [
+        [
+          {
+            "node": "TypeSafe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TypeSafe": {
+      "main": [
+        [
+          {
+            "node": "Publish",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Remove, with the rule it broke",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "A moderator decides",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "Community"
+    },
+    {
+      "name": "Judge"
+    }
+  ]
+}

@@ -1,0 +1,179 @@
+{
+  "name": "Fact-check a chatbot answer before it ships (Jev judge)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "factcheck",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Answer to check",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        420
+      ],
+      "webhookId": "factcheck"
+    },
+    {
+      "parameters": {
+        "jsCode": "// POST { question, source, answer }. Sample used when you run it by hand.\nconst b = $input.first().json.body || {};\nreturn [{ json: {\n  question: b.question || 'Can I return a sale item?',\n  source: b.source || 'Returns: full-price items within 30 days. Sale items are final and cannot be returned.',\n  answer: b.answer || 'Yes, sale items can be returned within 30 days for a full refund.',\n} }];"
+      },
+      "name": "Question, source, answer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "ask",
+        "connection": "direct",
+        "model": "jev-1.13.0",
+        "questions": {},
+        "questionsJson": "[{\"id\":\"unsupported\",\"kind\":\"noul\",\"text\":\"Does the answer state anything the source does not say, or that contradicts it?\"},{\"id\":\"answers_it\",\"kind\":\"noul\",\"text\":\"Does the answer respond to the question that was asked?\"}]",
+        "routing": "{\"unsupported\":{\"lte\":0.2},\"answers_it\":{\"gte\":0.7}}",
+        "replyLanguage": "off",
+        "failClosed": true,
+        "state": "={{ JSON.stringify($json) }}"
+      },
+      "name": "TypeSafe",
+      "type": "@taifoon/n8n-nodes-typesafe.taifoonTypeSafe",
+      "typeVersion": 1,
+      "position": [
+        480,
+        420
+      ],
+      "credentials": {
+        "taifoonTypeSafeApi": {
+          "id": "",
+          "name": "TypeSafe API (your key from console.typesafe.ai)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"send\": true, \"answer\": $(\"Question, source, answer\").first().json.answer } }}",
+        "options": {}
+      },
+      "name": "Send the answer",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        760,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"send\": false, \"answer\": \"I am not sure. A colleague will follow up.\" } }}",
+        "options": {}
+      },
+      "name": "Hold it back",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        760,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"send\": false, \"review\": true } }}",
+        "options": {}
+      },
+      "name": "Ask a person",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        760,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Stop a chatbot from making things up\n\nPOST `{ question, source, answer }` before an answer reaches a customer.\n\nTypeSafe (Jev) answers two yes/no questions with probabilities: does the answer claim anything the source does not say, and does it answer the question.\n\n**Pass** sends it, **Fail** holds it back, **Review** asks a person. Your own TypeSafe key only.",
+        "width": 500,
+        "height": 280
+      },
+      "name": "How it works",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        40
+      ]
+    }
+  ],
+  "connections": {
+    "Answer to check": {
+      "main": [
+        [
+          {
+            "node": "Question, source, answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Question, source, answer": {
+      "main": [
+        [
+          {
+            "node": "TypeSafe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TypeSafe": {
+      "main": [
+        [
+          {
+            "node": "Send the answer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Hold it back",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ask a person",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "Customer support"
+    },
+    {
+      "name": "Judge"
+    }
+  ]
+}

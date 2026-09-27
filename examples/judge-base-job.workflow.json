@@ -1,0 +1,235 @@
+{
+  "name": "Grade a Base agent job from its on-chain record (Jev judge)",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c",
+              "name": "chain",
+              "value": "8453",
+              "type": "string"
+            },
+            {
+              "id": "j",
+              "name": "job",
+              "value": "bitagent:8453:7287",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Which job",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://coord.taifoon.dev/v1/judge/evidence/{{ $json.chain }}/{{ encodeURIComponent($json.job) }}",
+        "options": {}
+      },
+      "name": "Read its record (public)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const e = $input.first().json;\nconst fact = (re) => (e.facts.find(([k]) => re.test(k)) || [])[1] || '';\nconst delivered = !!fact(/what was delivered/i) && !/nothing|not delivered/i.test(fact(/what was delivered/i));\nconst job = $('Which job').first().json;\nreturn [{ json: { state: e.state, ref: job.job, chainId: Number(job.chain), jobId: (job.job.match(/(\\d+)$/) || [])[1] || job.job,\n  facts: { delivered, checks: { funded: /funded/i.test(fact(/^funded$/i)) || !!fact(/^funded$/i), submitted: !!fact(/^submitted$/i) } } } }];"
+      },
+      "name": "Facts from the chain",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "ask",
+        "connection": "direct",
+        "model": "jev-1.13.0",
+        "questions": {},
+        "questionsJson": "[]",
+        "routing": "{}",
+        "replyLanguage": "off",
+        "failClosed": true,
+        "state": "={{ $json.state }}",
+        "jev": {
+          "rubric": true,
+          "subject": "={{ $json.ref }}",
+          "chainId": "={{ $json.chainId }}",
+          "factsJson": "={{ JSON.stringify($json.facts) }}",
+          "evaluator": "bitagent-erc8183",
+          "jobId": "={{ $json.jobId }}"
+        }
+      },
+      "name": "TypeSafe",
+      "type": "@taifoon/n8n-nodes-typesafe.taifoonTypeSafe",
+      "typeVersion": 1,
+      "position": [
+        900,
+        420
+      ],
+      "credentials": {
+        "taifoonTypeSafeApi": {
+          "id": "",
+          "name": "TypeSafe API (your key from console.typesafe.ai)"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "name": "Complete: sign the evaluator call",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        240
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "Reject: sign the evaluator call",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        420
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "Needs review: nothing ends, appeal",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Grade a real agent job on Base\n\n**Read its record** fetches the public evidence for an ERC-8183 job (no key): the task, price, parties and every event.\n\nTypeSafe (Jev) grades it on **your own key**. The output carries the unsigned `complete` / `reject` call for the job's evaluator seat: sign it with that wallet. Nothing is signed or sent here.\n\nChange **Which job** to any Base job, e.g. `8453:81100` for Virtuals ACP (set Evaluator Call to match).",
+        "width": 560,
+        "height": 320
+      },
+      "name": "How it works",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        200,
+        20
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Which job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Which job": {
+      "main": [
+        [
+          {
+            "node": "Read its record (public)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read its record (public)": {
+      "main": [
+        [
+          {
+            "node": "Facts from the chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Facts from the chain": {
+      "main": [
+        [
+          {
+            "node": "TypeSafe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TypeSafe": {
+      "main": [
+        [
+          {
+            "node": "Complete: sign the evaluator call",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject: sign the evaluator call",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Needs review: nothing ends, appeal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "Web3"
+    },
+    {
+      "name": "AI agents"
+    },
+    {
+      "name": "Judge"
+    }
+  ]
+}

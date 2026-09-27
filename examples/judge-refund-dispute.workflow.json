@@ -1,0 +1,161 @@
+{
+  "name": "Refund-dispute judge (Jev judge)",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Replace with your dispute: the order, what the buyer says, what the seller can show.\nreturn [{ json: {\n  order: 'Order 1142: wireless headphones, 89 EUR, delivered 2026-09-20',\n  complaint: 'The left earbud does not charge. I want a refund.',\n  evidence: 'Carrier: delivered and signed 2026-09-20. Seller photo before shipping shows both earbuds at 100 %. No return has been opened.',\n} }];"
+      },
+      "name": "The dispute",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "ask",
+        "connection": "direct",
+        "model": "jev-1.13.0",
+        "questions": {},
+        "questionsJson": "[{\"id\":\"defect_plausible\",\"kind\":\"noul\",\"text\":\"Given the order, the complaint and the evidence, is a defect on arrival plausible?\"},{\"id\":\"evidence_contradicts\",\"kind\":\"noul\",\"text\":\"Does the seller's evidence directly contradict the buyer's claim?\"}]",
+        "routing": "{\"defect_plausible\":{\"gte\":0.7},\"evidence_contradicts\":{\"lte\":0.3}}",
+        "replyLanguage": "off",
+        "failClosed": true,
+        "state": "={{ JSON.stringify($json) }}"
+      },
+      "name": "TypeSafe",
+      "type": "@taifoon/n8n-nodes-typesafe.taifoonTypeSafe",
+      "typeVersion": 1,
+      "position": [
+        480,
+        420
+      ],
+      "credentials": {
+        "taifoonTypeSafeApi": {
+          "id": "",
+          "name": "TypeSafe API (your key from console.typesafe.ai)"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "name": "Refund",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        760,
+        240
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "Deny, with the reason",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        760,
+        420
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "A person decides",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        760,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Decide the easy disputes, route the rest\n\nTwo closed questions, each with a probability. Only a clear case leaves by **Refund** or **Deny**. Anything in between goes to **a person**, so no one is refused on a guess.\n\nTune the thresholds in **Routing**. Your own TypeSafe key only.",
+        "width": 480,
+        "height": 240
+      },
+      "name": "How it works",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        40
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "The dispute",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "The dispute": {
+      "main": [
+        [
+          {
+            "node": "TypeSafe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TypeSafe": {
+      "main": [
+        [
+          {
+            "node": "Refund",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Deny, with the reason",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "A person decides",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "E-commerce"
+    },
+    {
+      "name": "Judge"
+    }
+  ]
+}

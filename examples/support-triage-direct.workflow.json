@@ -1,5 +1,5 @@
 {
-  "name": "TypeSafe \u2014 support triage (direct, bring your own key)",
+  "name": "TypeSafe — support triage (direct, bring your own key)",
   "nodes": [
     {
       "parameters": {},
@@ -81,7 +81,7 @@
       ],
       "credentials": {
         "taifoonTypeSafeApi": {
-          "id": "1",
+          "id": "",
           "name": "TypeSafe API"
         }
       }

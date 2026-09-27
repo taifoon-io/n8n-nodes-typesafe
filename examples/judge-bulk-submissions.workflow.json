@@ -1,0 +1,190 @@
+{
+  "name": "Grade a batch of submissions (Jev judge)",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// One item per submission. To use a Google Sheet, replace this node with Google Sheets: Get Rows\n// (columns: ref, task, criteria (one per line), delivered).\nconst rows = [\n  { ref: 'S-1', task: 'Summarise the attached article in three bullet points', criteria: 'Exactly three bullets\\nEach bullet states a claim from the article', delivered: '- Rates rose 0.25 %\\n- Inflation eased to 2.1 %\\n- The bank expects one more cut' },\n  { ref: 'S-2', task: 'Summarise the attached article in three bullet points', criteria: 'Exactly three bullets\\nEach bullet states a claim from the article', delivered: '' },\n];\nreturn rows.map((r) => ({ json: { ...r, criteria: r.criteria.split('\\n'), checks: { not_empty: !!r.delivered.trim() } } }));"
+      },
+      "name": "Submissions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const j = $json;\nconst criteria = j.criteria.map((c, i) => `${i + 1}. ${c}`).join('\\n');\nconst state = ['task: ' + j.task, 'acceptance criteria:\\n' + criteria, j.source ? 'source:\\n' + j.source : '', 'delivered:\\n' + (j.delivered || '(nothing was delivered)')].filter(Boolean).join('\\n\\n');\nconst checks = {};\nfor (const [name, ok] of Object.entries(j.checks || {})) checks[name] = !!ok;\nreturn { json: { ...j, state, facts: { delivered: !!(j.delivered && String(j.delivered).trim()), checks } } };"
+      },
+      "name": "What the judge reads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "ask",
+        "connection": "direct",
+        "model": "jev-1.13.0",
+        "questions": {},
+        "questionsJson": "[]",
+        "routing": "{}",
+        "replyLanguage": "off",
+        "failClosed": true,
+        "state": "={{ $json.state }}",
+        "jev": {
+          "rubric": true,
+          "subject": "={{ $json.ref }}",
+          "factsJson": "={{ JSON.stringify($json.facts) }}"
+        }
+      },
+      "name": "TypeSafe",
+      "type": "@taifoon/n8n-nodes-typesafe.taifoonTypeSafe",
+      "typeVersion": 1,
+      "position": [
+        700,
+        420
+      ],
+      "credentials": {
+        "taifoonTypeSafeApi": {
+          "id": "",
+          "name": "TypeSafe API (your key from console.typesafe.ai)"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "name": "Complete",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        240
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "Reject",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        420
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "Needs review",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Grade many submissions at once\n\nEach row is graded on its own: code checks first, then TypeSafe (Jev) answers the rubric with full probabilities. Every item leaves with its verdict and a receipt.\n\nFor a sheet: read rows with Google Sheets, and write `jev.verdict` and `jev.receipt.receiptHash` back after each exit. Your own TypeSafe key only.",
+        "width": 520,
+        "height": 260
+      },
+      "name": "How it works",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        200,
+        40
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Submissions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Submissions": {
+      "main": [
+        [
+          {
+            "node": "What the judge reads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "What the judge reads": {
+      "main": [
+        [
+          {
+            "node": "TypeSafe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TypeSafe": {
+      "main": [
+        [
+          {
+            "node": "Complete",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Needs review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "Education"
+    },
+    {
+      "name": "Judge"
+    }
+  ]
+}

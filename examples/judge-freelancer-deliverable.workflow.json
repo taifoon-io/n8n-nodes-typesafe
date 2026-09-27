@@ -1,0 +1,212 @@
+{
+  "name": "Accept or return a freelancer's deliverable (Jev judge)",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Submit a deliverable for review",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Brief",
+              "fieldType": "textarea",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Acceptance criteria (one per line)",
+              "fieldType": "textarea",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Deliverable (text or link contents)",
+              "fieldType": "textarea",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Deliverable form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        420
+      ],
+      "webhookId": "deliverable-form"
+    },
+    {
+      "parameters": {
+        "jsCode": "const f = $input.first().json;\nreturn [{ json: {\n  ref: 'delivery-' + Date.now(),\n  task: f['Brief'],\n  criteria: String(f['Acceptance criteria (one per line)'] || '').split('\\n').map((s) => s.trim()).filter(Boolean),\n  delivered: f['Deliverable (text or link contents)'],\n  checks: { not_empty: !!String(f['Deliverable (text or link contents)'] || '').trim() },\n} }];"
+      },
+      "name": "The job",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $input.first().json;\nconst criteria = j.criteria.map((c, i) => `${i + 1}. ${c}`).join('\\n');\nconst state = ['task: ' + j.task, 'acceptance criteria:\\n' + criteria, j.source ? 'source:\\n' + j.source : '', 'delivered:\\n' + (j.delivered || '(nothing was delivered)')].filter(Boolean).join('\\n\\n');\nconst checks = {};\nfor (const [name, ok] of Object.entries(j.checks || {})) checks[name] = !!ok;\nreturn [{ json: { ...j, state, facts: { delivered: !!(j.delivered && String(j.delivered).trim()), checks } } }];"
+      },
+      "name": "What the judge reads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "ask",
+        "connection": "direct",
+        "model": "jev-1.13.0",
+        "questions": {},
+        "questionsJson": "[]",
+        "routing": "{}",
+        "replyLanguage": "off",
+        "failClosed": true,
+        "state": "={{ $json.state }}",
+        "jev": {
+          "rubric": true,
+          "subject": "={{ $json.ref }}",
+          "factsJson": "={{ JSON.stringify($json.facts) }}"
+        }
+      },
+      "name": "TypeSafe",
+      "type": "@taifoon/n8n-nodes-typesafe.taifoonTypeSafe",
+      "typeVersion": 1,
+      "position": [
+        700,
+        420
+      ],
+      "credentials": {
+        "taifoonTypeSafeApi": {
+          "id": "",
+          "name": "TypeSafe API (your key from console.typesafe.ai)"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "name": "Accept: approve the invoice",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        240
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "Request changes",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        420
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "Escalate to the project lead",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Review deliverables against the brief\n\nA freelancer submits through the form. Code checks it is not empty; TypeSafe (Jev) checks it against each acceptance criterion, with probabilities.\n\n**Accept**, **Request changes**, or **Escalate** when the answers are unsure. Add an Email node to each exit. Your own TypeSafe key only.",
+        "width": 500,
+        "height": 260
+      },
+      "name": "How it works",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        200,
+        40
+      ]
+    }
+  ],
+  "connections": {
+    "Deliverable form": {
+      "main": [
+        [
+          {
+            "node": "The job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "The job": {
+      "main": [
+        [
+          {
+            "node": "What the judge reads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "What the judge reads": {
+      "main": [
+        [
+          {
+            "node": "TypeSafe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TypeSafe": {
+      "main": [
+        [
+          {
+            "node": "Accept: approve the invoice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Request changes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Escalate to the project lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "Freelancing"
+    },
+    {
+      "name": "Judge"
+    }
+  ]
+}

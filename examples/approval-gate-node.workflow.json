@@ -83,7 +83,7 @@
       },
       "credentials": {
         "taifoonTypeSafeApi": {
-          "id": "1",
+          "id": "",
           "name": "TypeSafe API"
         }
       }

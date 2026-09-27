@@ -1,0 +1,161 @@
+{
+  "name": "QA an extraction against its source document (Jev judge)",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Replace with your document text and the fields your extractor (OCR, LLM, parser) produced.\nreturn [{ json: {\n  document: 'INVOICE INV-20931\\nIssued 2026-09-01 by Northwind Parts GmbH\\nTotal due: EUR 1,240.50\\nPayment due by 2026-10-01',\n  extracted: { invoice_no: 'INV-20931', total: 1240.5, currency: 'EUR', due_date: '2026-10-01' },\n} }];"
+      },
+      "name": "Document and extraction",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "ask",
+        "connection": "direct",
+        "model": "jev-1.13.0",
+        "questions": {},
+        "questionsJson": "[{\"id\":\"all_match\",\"kind\":\"noul\",\"text\":\"Does every extracted value match the document exactly?\"},{\"id\":\"anything_invented\",\"kind\":\"noul\",\"text\":\"Is any extracted value absent from the document?\"}]",
+        "routing": "{\"all_match\":{\"gte\":0.85},\"anything_invented\":{\"lte\":0.15}}",
+        "replyLanguage": "off",
+        "failClosed": true,
+        "state": "={{ JSON.stringify($json) }}"
+      },
+      "name": "TypeSafe",
+      "type": "@taifoon/n8n-nodes-typesafe.taifoonTypeSafe",
+      "typeVersion": 1,
+      "position": [
+        480,
+        420
+      ],
+      "credentials": {
+        "taifoonTypeSafeApi": {
+          "id": "",
+          "name": "TypeSafe API (your key from console.typesafe.ai)"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "name": "Post to accounting",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        760,
+        240
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "Re-extract",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        760,
+        420
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "A person checks it",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        760,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Catch a wrong extraction before it is booked\n\nTypeSafe (Jev) compares the extracted fields with the document and answers with probabilities. Clean rows post automatically; an invented or mismatched value never does.\n\nYour own TypeSafe key only.",
+        "width": 460,
+        "height": 220
+      },
+      "name": "How it works",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        40
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Document and extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document and extraction": {
+      "main": [
+        [
+          {
+            "node": "TypeSafe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TypeSafe": {
+      "main": [
+        [
+          {
+            "node": "Post to accounting",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Re-extract",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "A person checks it",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "Finance"
+    },
+    {
+      "name": "Judge"
+    }
+  ]
+}

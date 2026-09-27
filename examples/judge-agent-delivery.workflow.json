@@ -1,0 +1,189 @@
+{
+  "name": "Grade an AI agent's delivered work (Jev judge)",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Replace with your job: what was asked, what \"done\" means, what came back.\nreturn [{ json: {\n  ref: 'job-4711',\n  task: 'Extract the invoice into JSON with invoice_no, total, currency and due_date',\n  criteria: ['Returns one JSON object with exactly the four fields', 'Every value matches the source invoice', 'due_date is ISO 8601'],\n  source: 'INVOICE INV-20931 · Total due: EUR 1,240.50 · Payment due by 2026-10-01',\n  delivered: '{\"invoice_no\":\"INV-20931\",\"total\":1240.50,\"currency\":\"EUR\",\"due_date\":\"2026-10-01\"}',\n  checks: { parses_as_json: true },\n} }];"
+      },
+      "name": "The job",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $input.first().json;\nconst criteria = j.criteria.map((c, i) => `${i + 1}. ${c}`).join('\\n');\nconst state = ['task: ' + j.task, 'acceptance criteria:\\n' + criteria, j.source ? 'source:\\n' + j.source : '', 'delivered:\\n' + (j.delivered || '(nothing was delivered)')].filter(Boolean).join('\\n\\n');\nconst checks = {};\nfor (const [name, ok] of Object.entries(j.checks || {})) checks[name] = !!ok;\nreturn [{ json: { ...j, state, facts: { delivered: !!(j.delivered && String(j.delivered).trim()), checks } } }];"
+      },
+      "name": "What the judge reads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "ask",
+        "connection": "direct",
+        "model": "jev-1.13.0",
+        "questions": {},
+        "questionsJson": "[]",
+        "routing": "{}",
+        "replyLanguage": "off",
+        "failClosed": true,
+        "state": "={{ $json.state }}",
+        "jev": {
+          "rubric": true,
+          "subject": "={{ $json.ref }}",
+          "factsJson": "={{ JSON.stringify($json.facts) }}"
+        }
+      },
+      "name": "TypeSafe",
+      "type": "@taifoon/n8n-nodes-typesafe.taifoonTypeSafe",
+      "typeVersion": 1,
+      "position": [
+        700,
+        420
+      ],
+      "credentials": {
+        "taifoonTypeSafeApi": {
+          "id": "",
+          "name": "TypeSafe API (your key from console.typesafe.ai)"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "name": "Complete: accept and pay",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        240
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "Reject: send it back",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        420
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "Needs review: a person decides",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Did the agent do the work it was paid for?\n\n1. **The job**: the task, what \"done\" means, the source and what came back.\n2. **Code checks first**: a failed check rejects without asking the model.\n3. **TypeSafe (Jev)** answers four closed questions (spec met, unsupported claims, ending, concealment) with full probabilities.\n4. Code composes **complete / reject / needs review**. The output carries a receipt anyone can recompute.\n\nYour own TypeSafe key only (console.typesafe.ai).",
+        "width": 520,
+        "height": 300
+      },
+      "name": "How it works",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        200,
+        40
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "The job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "The job": {
+      "main": [
+        [
+          {
+            "node": "What the judge reads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "What the judge reads": {
+      "main": [
+        [
+          {
+            "node": "TypeSafe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TypeSafe": {
+      "main": [
+        [
+          {
+            "node": "Complete: accept and pay",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject: send it back",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Needs review: a person decides",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "AI agents"
+    },
+    {
+      "name": "Judge"
+    }
+  ]
+}

@@ -44,6 +44,29 @@ earlier? The credential type was renamed: [Upgrading](docs/UPGRADING.md).
 
 Ready-made versions are in [`examples/`](examples).
 
+## Judge workflows, ready to import
+
+Each one runs as imported on sample data, needs only your own TypeSafe key, and ends in three plainly named exits. Import
+the file in n8n (**Workflows → Import from File**), pick your **TypeSafe API** credential, press **Test workflow**.
+
+| # | Workflow | For | The judge decides | File |
+|---|---|---|---|---|
+| 1 | Grade an AI agent's delivered work | teams running agents | did the delivery meet the task's criteria? complete / reject / needs review | [judge-agent-delivery](examples/judge-agent-delivery.workflow.json) |
+| 2 | Grade a Base agent job from its on-chain record | agent marketplaces, ERC-8183 builders | the same, from the job's public record, plus the unsigned evaluator call | [judge-base-job](examples/judge-base-job.workflow.json) |
+| 3 | Fact-check a chatbot answer before it ships | support and RAG teams | does the answer claim anything its source does not say? send / hold / review | [judge-answer-factcheck](examples/judge-answer-factcheck.workflow.json) |
+| 4 | Accept or return a freelancer's deliverable | agencies, marketplaces | criteria met? accept / request changes / escalate | [judge-freelancer-deliverable](examples/judge-freelancer-deliverable.workflow.json) |
+| 5 | Refund-dispute judge | e-commerce, marketplaces | refund / deny / a person, from the complaint and the evidence | [judge-refund-dispute](examples/judge-refund-dispute.workflow.json) |
+| 6 | QA an extraction against its source | finance operations | does every extracted value match the document? post / re-extract / review | [judge-extraction-qa](examples/judge-extraction-qa.workflow.json) |
+| 7 | Grade a batch of submissions | educators, bounty programmes | per row: verdict, probabilities and a receipt | [judge-bulk-submissions](examples/judge-bulk-submissions.workflow.json) |
+| 8 | Check a translation keeps its meaning | localisation | meaning kept, nothing added or dropped? publish / send back / review | [judge-translation](examples/judge-translation.workflow.json) |
+| 9 | Moderate posts against your own rules | communities | which rule, if any, a post breaks: publish / remove / a moderator | [judge-moderation](examples/judge-moderation.workflow.json) |
+| 10 | Approval gate before an AI agent's action | anyone running an AI Agent | is this action safe and asked for? run / block / a person | [approval-gate-node](examples/approval-gate-node.workflow.json) |
+| 11 | Triage support tickets | support teams | refund? which team? how urgent? | [support-triage-direct](examples/support-triage-direct.workflow.json) |
+
+Workflows 1, 2, 4 and 7 use **Jev Options → Ask RUBRIC_v1**: code checks the facts first, Jev answers four closed
+questions, and the verdict comes with a receipt anyone can recompute. The others ask your own Noul questions and route
+them with thresholds. Every file is tested end to end in [`test/templates.test.mjs`](test/templates.test.mjs).
+
 ## Three kinds of question
 
 | You ask | You get back | Think of it as |
