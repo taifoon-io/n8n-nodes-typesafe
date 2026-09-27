@@ -1,9 +1,13 @@
 # TypeSafe for n8n
 
-An n8n community node for structured decisions with [TypeSafe's Jev](https://docs.typesafe.ai/introduction), a
-System One model. Ask Noul (yes/no), Choice (pick one) and Score (rate it) questions about any item. Every answer
-carries a probability. The node routes each item to **Pass**, **Fail** or **Review**, so uncertain cases go to a
-person instead of going wrong quietly.
+**Let your n8n workflow make a decision, and send it to a person when it is not sure.**
+
+- **What:** an n8n node that asks TypeSafe's Jev yes/no (Noul), pick-one (Choice) and rate-it (Score) questions
+  about any item, and routes it to **Pass**, **Fail** or **Review**.
+- **Why:** a chat model writes prose you have to parse and guesses when unsure. This node returns a probability for
+  every answer, so an uncertain item goes to a person instead of going wrong quietly.
+- **How:** in n8n, **Settings → Community Nodes → Install** `@taifoon/n8n-nodes-typesafe`, add your TypeSafe key, and ask
+  "Is this a refund request?".
 
 Use it to route tickets, classify rows, guard an LLM's input or output, or gate an agent's tool call for approval.
 It is not for writing text, summarising, or reasoning about code.

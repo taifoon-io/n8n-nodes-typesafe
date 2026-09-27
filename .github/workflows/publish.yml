@@ -9,7 +9,7 @@ permissions:
   id-token: write          # lets npm sign the provenance statement through GitHub's OIDC
 jobs:
   publish:
-    # v1.2.3 releases the n8n node; jev-v0.1.0 releases @taifoon/jev (publish-jev.yml)
+    # a vX.Y.Z release publishes this node
     if: startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     steps:
@@ -19,8 +19,6 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
       - run: npm ci
-      - name: Install jev/ too (the root lint ruleset reads its files and must resolve their imports)
-        run: npm ci --prefix jev
       - run: npm run lint
       - run: npm run build
       - name: Translator self-test
