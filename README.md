@@ -1,5 +1,9 @@
 # TypeSafe for n8n
 
+> **Publish mirror.** The source of this package moved to `taifoon-io/taifoon-agents` (private), directory
+> `judge/n8n-typesafe`, on 2026-09-27. This public repository is the publish mirror that npm provenance and the n8n
+> community listing point at; it is updated from there.
+
 Most automations have a moment where someone has to *decide*: is this a refund request, which team
 gets this ticket, how urgent is it, is this invoice a duplicate. Today you either write brittle rules
 for that, or you ask a chat model and then fight with its prose: parse the answer, handle the day it
