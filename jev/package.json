@@ -1,6 +1,6 @@
 {
   "name": "@taifoon/jev",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Jev as an on-chain grader for any protocol: deterministic facts, calibrated atomic answers, a composed verdict, a receipt, the on-chain record and the evaluator call. No runtime dependencies, no key inside.",
   "keywords": [
     "jev",

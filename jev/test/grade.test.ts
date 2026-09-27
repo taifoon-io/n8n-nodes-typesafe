@@ -99,24 +99,38 @@ describe('record()', () => {
     expect(out.calls[0]!.data).toBe(encodeCall(ANSWER_LOG_RECORD, [keccakHex('compose.answers'), r.subjectId, r.inputDigest, r.answersDigest!, r.decision!.digest, 'jev-1.13.0', `urn:jev:answers:${r.answersDigest}`]));
     expect(keccakHex('compose.answers')).toBe('0xcd6a31d63f65b0332f996a3d27a906aaacec242f09275c40175debae88ecab84'); // the useCase topic of tx 0x9a38cf55…
   });
-  it('network is a flag: none · base (to = null while this version has no Base address) · both', async () => {
+  it('network is a flag: none · base (the Base logs since 0.1.1) · both', async () => {
     const r = await grade({ subject: 'b', evidence: 'x', answers: CLEAN.map((a) => ({ ...a, value: String(a.value) })) });
     expect(await record(r, { network: 'none' })).toMatchObject({ status: 'none', calls: [] });
-    const send = vi.fn(async () => '0xtx');
-    const base = await record(r, { network: 'base', send });
-    expect(base.status).toBe('partial');
-    expect(base.calls.every((c) => c.to === null && c.chainId === 8453)).toBe(true);
-    expect(send).not.toHaveBeenCalled();
+    const base = await record(r, { network: 'base' });
+    expect(base.status).toBe('ready');
+    expect(base.calls.map((c) => `${c.chainId}:${c.to}`)).toEqual(['8453:0x8e9B9cE86a2d55c10318607b0c815B7B8C66254d', '8453:0x209490d6A0FFC5368A42b0c2208BDCda853f6a92']);
     const both = await record(r, { network: 'both' });
     expect(both.calls.map((c) => `${c.chainId}:${c.fn}`)).toEqual(['36927:JevAnswerLog.record', '36927:JevDecisionLog.record', '8453:JevAnswerLog.record', '8453:JevDecisionLog.record']);
     expect(both.calls[0]!.data).toBe(both.calls[2]!.data);
+    const send = vi.fn(async () => '0xtx');
     const sent = await record(r, { network: 'both', send });
-    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledTimes(4);
     expect(sent.status).toBe('sent');
   });
 });
 
 describe('verify()', () => {
+  it('on Base the answer row is found through recordedAt, then that one block', async () => {
+    const digest = '0x6c7e6d2977689f1c9639a377b165f998d1160cc30eca8ff4f1fedc793db2f52d';
+    const calls: Array<{ method: string; params: any[] }> = [];
+    const f = vi.fn(async (_u: unknown, init?: RequestInit) => {
+      const b = JSON.parse(String(init?.body)); calls.push(b);
+      if (b.method === 'eth_call') return new Response(JSON.stringify({ result: '0x' + (51_900_000).toString(16).padStart(64, '0') }));
+      if (b.method === 'eth_blockNumber') return new Response(JSON.stringify({ result: '0x' + (51_900_010).toString(16) }));
+      return new Response(JSON.stringify({ result: [] }));
+    });
+    const v = await verify(digest, { fetch: f as never, network: 'base' });
+    expect(v.onChain.chainId).toBe(8453);
+    expect(calls[0]!.params[0].to).toBe('0x8e9B9cE86a2d55c10318607b0c815B7B8C66254d');
+    expect(calls[0]!.params[0].data).toBe('0x' + keccakHex('recordedAt(bytes32)').slice(2, 10) + digest.slice(2));
+    expect(calls[1]!.params[0]).toMatchObject({ address: '0x8e9B9cE86a2d55c10318607b0c815B7B8C66254d', fromBlock: '0x' + (51_900_000).toString(16), toBlock: '0x' + (51_900_000).toString(16) });
+  });
   it('a bare answers digest finds its JevAnswered log (execution 86, tx 0x9a38cf55…)', async () => {
     const f = vi.fn(async (...args: unknown[]) => new Response(JSON.stringify(String((args[1] as RequestInit | undefined)?.body).includes('0x1D622511862DD7DEffB8fEeBc225E0FAdA1e9A05') ? decided86 : logs86)));
     const v = await verify('0x6c7e6d2977689f1c9639a377b165f998d1160cc30eca8ff4f1fedc793db2f52d', { fetch: f as never });

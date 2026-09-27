@@ -13,12 +13,16 @@ export const CONTRACTS = Object.freeze({
     judgeAdapter: '0xbd4c9e797a8DBbfdde9C77bc5A5b21ACf611Db8f',
     assuranceHook: '0x7110c8951d17b69054395742e265bbd98259564a',
   },
-  /** Base (8453). answerLog / decisionLog: null in this version → record({ network: 'base' }) returns the call data with `to: null` */
+  /** Base (8453): both logs are live. Only the KMS recorder 0xe9F0E71e7Fc66864126C0aE5588a7858b25dE51D is `trusted` on the answer log. */
   base: {
     chainId: 8453,
     rpc: 'https://mainnet.base.org',
-    answerLog: null as { address: string; fromBlock: number } | null,
-    decisionLog: null as { address: string; fromBlock: number } | null,
+    /** JevAnswerLog, redeployed 2026-09-27 (tx 0xeb7d2dac…ae87); supersedes 0x5bac70eb78224bbCBa83f5A36DF09D549d3f57fa */
+    answerLog: { address: '0x8e9B9cE86a2d55c10318607b0c815B7B8C66254d', fromBlock: 51_863_008 } as { address: string; fromBlock: number } | null,
+    /** JevDecisionLog, deployed 2026-09-27 (tx 0x0e6300c0…4fc7); the recorder is msg.sender */
+    decisionLog: { address: '0x209490d6A0FFC5368A42b0c2208BDCda853f6a92', fromBlock: 51_856_200 } as { address: string; fromBlock: number } | null,
+    /** the one trusted recorder of the Base answer log (KMS alias/jev-recorder-base) */
+    answerRecorder: '0xe9F0E71e7Fc66864126C0aE5588a7858b25dE51D',
     virtualsErc8183: '0x238E541BfefD82238730D00a2208E5497F1832E0',
     virtualsMemoAcpRouter: '0xa6C9BA866992cfD7fd6460ba912bfa405adA9df0',
     bitagentErc8183: '0x5009ABB3A309115a4a682C66BAf3BC9E0329BaB7',
