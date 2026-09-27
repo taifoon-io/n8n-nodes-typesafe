@@ -2,6 +2,10 @@ import type { IDataObject, IExecuteFunctions, IHttpRequestOptions, INode, INodeE
 import { NodeApiError, NodeConnectionTypes, NodeOperationError, sleep } from 'n8n-workflow';
 
 import { decide, reply, translateTask, type AnswerLike, type Lang, type Route } from './translate';
+import { answersOf, buildReceipt, inputFor, packOf } from './jev/receipt';
+import { defineRubric, RUBRIC_v1, type Facts, type Verdict } from './jev/rubric';
+import { record as recordCalls, type Network } from './jev/record';
+import { evaluatorCall, type Protocol } from './jev/evaluator/index';
 
 /**
  * TypeSafe for n8n.
@@ -88,6 +92,26 @@ async function askTrial(ctx: IExecuteFunctions, body: IDataObject): Promise<IDat
 	return (await ctx.helpers.httpRequest({ method: 'POST', url: TRIAL_URL, body, json: true, timeout: 60000 })) as IDataObject;
 }
 
+/** Jev options (1.5.0): all off by default, so an Ask without them behaves exactly as before. */
+interface JevOptions { rubric?: boolean; subject?: string; chainId?: number; factsJson?: string | IDataObject; record?: Network; evaluator?: Protocol | 'none'; jobId?: string; evaluatorAddress?: string }
+const BRANCH_OF: Record<Verdict, 'pass' | 'fail' | 'review'> = { complete: 'pass', reject: 'fail', needs_review: 'review' };
+const VERDICT_OF: Record<string, Verdict> = { pass: 'complete', fail: 'reject', review: 'needs_review' };
+function jevFacts(raw: JevOptions['factsJson']): Facts {
+	const f = (typeof raw === 'string' ? JSON.parse(raw || '{}') : raw ?? {}) as { delivered?: boolean; checks?: Record<string, boolean | null>; priceUsdc?: number | null };
+	const checks = Object.fromEntries(Object.entries(f.checks ?? {}).map(([k, v]) => [k, v === true ? true : v === false ? false : null])) as Record<string, boolean | null>;
+	const vals = Object.values(checks);
+	return { delivered: f.delivered !== false, checksOk: vals.includes(false) ? false : vals.includes(true) ? true : null, checks, priceUsdc: typeof f.priceUsdc === 'number' ? f.priceUsdc : null };
+}
+/** the receipt, the unsigned record calls and the unsigned evaluator call — nothing is signed or sent here */
+async function jevOutput(o: JevOptions, receipt: ReturnType<typeof buildReceipt>): Promise<IDataObject> {
+	const rec = o.record && o.record !== 'none' && receipt.decision ? await recordCalls(receipt, { network: o.record }) : null;
+	const proto = o.evaluator && o.evaluator !== 'none' ? o.evaluator : null;
+	const call = proto && o.jobId ? evaluatorCall(proto, o.jobId, receipt.verdict, receipt.decision?.digest ?? receipt.receiptHash, { to: o.evaluatorAddress || undefined }) : null;
+	return { verdict: receipt.verdict, reasons: receipt.reasons, receiptHash: receipt.receiptHash, decisionDigest: receipt.decision?.digest ?? null, answersDigest: receipt.answersDigest,
+		...(rec ? { record: { network: rec.network, status: rec.status, calls: rec.calls, notes: rec.notes } } : {}),
+		...(proto ? { evaluator: call ?? null } : {}), receipt } as unknown as IDataObject;
+}
+
 export class TaifoonTypeSafe implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Taifoon TypeSafe',
@@ -148,6 +172,22 @@ export class TaifoonTypeSafe implements INodeType {
 					{ name: 'Japanese', value: 'ja' }, { name: 'Match Questions', value: 'auto' }, { name: 'Off', value: 'off' }, { name: 'Polish', value: 'pl' }, { name: 'Portuguese', value: 'pt' }, { name: 'Russian', value: 'ru' }, { name: 'Spanish', value: 'es' }] },
 			{ displayName: 'Fail Closed', name: 'failClosed', type: 'boolean', default: true, displayOptions: { show: { operation: ['ask'] } },
 				description: 'Whether an answer that did not validate stops the item with an error instead of flowing on as a null' },
+			{ displayName: 'Jev Options', name: 'jev', type: 'collection', placeholder: 'Add Jev Option', default: {}, displayOptions: { show: { operation: ['ask'] } },
+				description: 'Grade with Jev and put the result on chain: a receipt, the unsigned record calls, the unsigned evaluator call. Nothing is signed or sent by this node. Off by default.',
+				options: [
+					{ displayName: 'Ask RUBRIC_v1', name: 'rubric', type: 'boolean', default: false, description: 'Whether to ask the four RUBRIC_v1 questions (spec_met, unsupported_claim, ending, cheat_shaped) about the item and compose complete / reject / needs_review under THRESHOLDS_v1. A failed fact rejects without asking Jev. Pass = complete, Fail = reject, Review = needs_review.' },
+					{ displayName: 'Evaluator Address', name: 'evaluatorAddress', type: 'string', default: '', description: 'The contract the evaluator call goes to, when it is not the protocol default (required for an assurance hook)' },
+					{ displayName: 'Evaluator Call', name: 'evaluator', type: 'options', default: 'none', description: 'Adds the unsigned call that ends the job on this protocol, as its evaluator (null for needs_review)',
+						options: [
+							{ name: 'Assurance Hook', value: 'assurance-hook' }, { name: 'BitAgent ERC-8183', value: 'bitagent-erc8183' }, { name: 'Judge Adapter (Devnet)', value: 'judge-adapter' },
+							{ name: 'None', value: 'none' }, { name: 'Virtuals ERC-8183', value: 'virtuals-erc8183' }, { name: 'Virtuals Memo-ACP', value: 'virtuals-memo-acp' }] },
+					{ displayName: 'Facts (JSON)', name: 'factsJson', type: 'json', default: '{"delivered": true, "checks": {}}', description: 'The deterministic checks your workflow already made, e.g. {"delivered": true, "checks": {"proof_verifies": true}, "priceUsdc": 5}. A false check is final.' },
+					{ displayName: 'Job ID', name: 'jobId', type: 'string', default: '', description: 'The job (or evaluation memo) the evaluator call ends' },
+					{ displayName: 'Record On', name: 'record', type: 'options', default: 'none', description: 'Adds the unsigned JevAnswerLog and JevDecisionLog record calls for this receipt, on this network',
+						options: [{ name: 'Base', value: 'base' }, { name: 'Both', value: 'both' }, { name: 'Devnet 36927', value: 'devnet' }, { name: 'None', value: 'none' }] },
+					{ displayName: 'Subject', name: 'subject', type: 'string', default: '', description: 'What is being graded: the job reference the receipt and the on-chain subject are keyed by' },
+					{ displayName: 'Subject Chain ID', name: 'chainId', type: 'number', default: 0, description: 'The chain the subject lives on (0 = off chain)' },
+				] },
 			{ displayName: 'Raw Output', name: 'rawOutput', type: 'boolean', default: false, displayOptions: { show: { operation: ['ask'] } },
 				description: 'Whether to return Jev\'s answer exactly as TypeSafe sends it, with none of this node\'s interpretation. Skips Translate/Routing/Reply and the per-question shaping: the output is the raw {answers, model, usage} the API returned. Use this to get the model\'s own numbers and probabilities untouched and do your own downstream logic. Routing outputs (fail/review) are not produced in raw mode — everything flows on the first output.' },
 		],
@@ -188,8 +228,22 @@ export class TaifoonTypeSafe implements INodeType {
 				const ui = ((this.getNodeParameter('questions', i) as IDataObject).question as unknown as UiQuestion[] | undefined) ?? [];
 				const extraRaw = this.getNodeParameter('questionsJson', i, '[]') as string | UiQuestion[];
 				const extra = (typeof extraRaw === 'string' ? JSON.parse(extraRaw || '[]') : extraRaw) as UiQuestion[];
-				const qs = [...ui, ...(Array.isArray(extra) ? extra : [])].filter((q) => q?.id && q?.text);
+				const jev = (this.getNodeParameter('jev', i, {}) as JevOptions) ?? {};
+				const jevOn = Object.keys(jev).length > 0;
+				const rubricOn = jev.rubric === true;
+				const rubricQs: UiQuestion[] = rubricOn ? RUBRIC_v1.asked.map((q) => ({ id: q.id, kind: 'choice', text: q.text, options: q.options.join(', ') })) : [];
+				const qs = [...ui, ...(Array.isArray(extra) ? extra : []), ...rubricQs].filter((q) => q?.id && q?.text);
 				if (!qs.length) throw new NodeOperationError(this.getNode(), 'Add at least one question', { itemIndex: i });
+				const facts = jevOn ? jevFacts(jev.factsJson) : null;
+				const subject = { chainId: Number(jev.chainId ?? 0), ref: String(jev.subject || `n8n-item-${i}`) };
+				// RUBRIC_v1: the facts decide first (a false check rejects and Jev is not asked); Jev reads the evidence + the facts section
+				const input = rubricOn ? inputFor(packOf(state as string | object), facts!, connection === 'trial' ? 4000 : undefined) : null;
+				if (rubricOn && RUBRIC_v1.compose(facts!, null).forced === 'hard_fail') {
+					const receipt = buildReceipt({ rubric: RUBRIC_v1, subject, state: input!.state, jevState: input!.jevState, facts: facts!, answers: null, model: null, connection: 'none', caller: 'n8n' });
+					fail.push({ pairedItem: { item: i }, json: { branch: 'fail', jev: await jevOutput(jev, receipt) } });
+					continue;
+				}
+				if (input) state = input.jevState;
 				const routingRaw = this.getNodeParameter('routing', i, '{}') as string | IDataObject;
 				const routing = (typeof routingRaw === 'string' ? JSON.parse(routingRaw || '{}') : routingRaw) as Record<string, Route>;
 
@@ -250,15 +304,28 @@ export class TaifoonTypeSafe implements INodeType {
 				}
 				// the backward translation runs HERE, identically on both connections
 				const routed = Object.keys(routing).length ? decide(answers, routing) : null;
+				let jevOut: IDataObject | null = null;
+				if (jevOn) {
+					const model = String((rawRes as { upstreamModel?: string }).upstreamModel ?? meta.model ?? '') || null;
+					const asked = answers.filter((a) => a.schema_ok !== false).map((a) => ({ id: a.id, value: a.value, confidence: (a as { confidence?: number }).confidence ?? (typeof (a as { p?: number }).p === 'number' ? Math.max((a as { p: number }).p, 1 - (a as { p: number }).p) : 0),
+						probabilities: (a as { probabilities?: Record<string, number> }).probabilities ?? (typeof (a as { p?: number }).p === 'number' ? { yes: (a as { p: number }).p, no: 1 - (a as { p: number }).p } : {}) }));
+					const rubric = rubricOn ? RUBRIC_v1 : defineRubric({ version: 'n8n-routing.v1', questions: qs.map((q) => ({ id: q.id, text: q.text, options: q.kind === 'choice' ? parseOptions(q.options).map(([o]) => o) : q.kind === 'noul' ? ['yes', 'no'] : split(q.levels, /\s*\|\s*/) })),
+						compose: () => { const b = routed?.branch ?? 'pass'; return { verdict: VERDICT_OF[b] ?? 'needs_review', auto: b !== 'review', forced: null, reasons: [`routing branch ${b}`], scores: { spec_met: null, unsupported_claim: null, scope_ok: null, cheat_shaped: null, ending: null, severity: null } }; } });
+					const sent = input ?? { state: packOf(state as string | object), jevState: packOf(state as string | object) };
+					const receipt = buildReceipt({ rubric, subject, state: sent.state, jevState: sent.jevState, facts: facts!, answers: answersOf(asked), model, connection: connection === 'trial' ? 'trial' : 'key', latency_ms: typeof meta.latency_ms === 'number' ? meta.latency_ms : null, caller: 'n8n' });
+					jevOut = await jevOutput(jev, receipt);
+				}
 				const byId: IDataObject = {};
 				for (const a of answers) byId[a.id] = a as unknown as IDataObject;
 				const replyIn = this.getNodeParameter('replyLanguage', i, 'off') as string;
 				const said = replyIn === 'off' ? null : reply(answers, { lang: replyIn === 'auto' ? undefined : (replyIn as Lang), questions: qs.map((q) => ({ id: q.id, text: q.text, source: q.source, levels: q.levels })),
 					decisions: routed?.decisions, branch: routed?.branch });
+				// with RUBRIC_v1 on and no Routing of your own, the composed verdict picks the output
+				const branch = rubricOn && !routed && jevOut ? BRANCH_OF[jevOut.verdict as Verdict] : routed?.branch ?? 'pass';
 				const out: INodeExecutionData = { pairedItem: { item: i }, json: { ...meta, schema_ok: schemaOk, answers: byId,
-					...(routed ? { decisions: routed.decisions as unknown as IDataObject[], allPass: routed.allPass, branch: routed.branch } : { branch: 'pass' }),
-					...(said ? { reply: said as unknown as IDataObject } : {}) } };
-				(routed?.branch === 'fail' ? fail : routed?.branch === 'review' ? review : pass).push(out);
+					...(routed ? { decisions: routed.decisions as unknown as IDataObject[], allPass: routed.allPass, branch } : { branch }),
+					...(said ? { reply: said as unknown as IDataObject } : {}), ...(jevOut ? { jev: jevOut } : {}) } };
+				(branch === 'fail' ? fail : branch === 'review' ? review : pass).push(out);
 			} catch (error) {
 				if (this.continueOnFail()) { review.push({ json: { error: String((error as Error).message ?? 'request failed').replace(/(apikey_|tfn_live_|Bearer\s+)[A-Za-z0-9_.-]+/g, '$1[redacted]'), branch: 'review' }, pairedItem: { item: i } }); continue; }
 				if (error instanceof NodeOperationError) throw new NodeOperationError(this.getNode(), error.message, { itemIndex: i, description: error.description ?? undefined });

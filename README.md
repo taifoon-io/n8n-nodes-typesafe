@@ -197,6 +197,39 @@ returns the API's answer *exactly as TypeSafe sent it*, with none of its interpr
 - Works on both connections (your key and the free trial). `Fail Closed` still applies before the raw
   object is emitted, so a malformed answer still stops the item unless you turn it off.
 
+## Grade a job with Jev, and put it on chain (Jev Options, 1.5.0)
+
+For agent jobs with an escrow and an evaluator seat, the Ask operation has **Jev Options**. All of them are off by
+default, and without them the node behaves exactly as 1.4.0.
+
+- **Ask RUBRIC_v1** adds the four questions of the published rubric: spec_met, unsupported_claim, ending and
+  cheat_shaped. Jev reads the item, then a section listing the facts your workflow established. The node composes
+  **complete / reject / needs_review** under THRESHOLDS_v1 and routes them to Pass / Fail / Review.
+- **Facts (JSON)** holds the checks you already made, e.g. `{"delivered": true, "checks": {"proof_verifies": true}}`.
+  A false check rejects on Fail, and Jev is not asked.
+- **Record On** (`none`, `devnet`, `base`, `both`) adds the unsigned calls that record the receipt on JevAnswerLog
+  and JevDecisionLog. On devnet 36927 the calls carry the logs' addresses. In this version the Base calls carry
+  `to: null`.
+- **Evaluator Call**, **Job ID** and **Evaluator Address** add the one unsigned call that ends the job as its
+  evaluator. The protocols are Virtuals ERC-8183, Virtuals memo-ACP, BitAgent ERC-8183, an assurance hook or the judge
+  adapter. For needs_review the call is `null`.
+
+The output carries `jev: { verdict, reasons, receiptHash, decisionDigest, answersDigest, record?, evaluator?, receipt }`.
+Nothing is signed or sent: a signer node or your wallet does that. The same code, with its tests against real
+transactions, is the standalone package [`@taifoon/jev`](jev/README.md).
+
+## n8n verification (Creator Portal) — status
+
+| Requirement | Status | Proof |
+|---|---|---|
+| Public source repository | done | this repository, `taifoon-io/n8n-nodes-typesafe` (public) |
+| No run-time dependencies; no environment or file-system access in `nodes/` and `credentials/` | done | `ci.yml` checks both on every push |
+| Lint with n8n's community-node ruleset | done | `npm run lint` in `ci.yml` and `publish.yml` |
+| `author.email` is a real mailbox (n8n sends the ownership token there) | done | `publish.yml` refuses a noreply address |
+| npm publish with provenance from GitHub Actions | done | 1.4.0 carries an SLSA provenance attestation ([npm](https://www.npmjs.com/package/@taifoon/n8n-nodes-typesafe)); release run [35778144807](https://github.com/taifoon-io/n8n-nodes-typesafe/actions/runs/35778144807) |
+| n8n's community-package scanner passes on the published package | done | the same run's scanner step (success) |
+| Submission on [creators.n8n.io](https://creators.n8n.io) | **not submitted** | needs the npm package owner (`taifoon`) to sign in and submit `@taifoon/n8n-nodes-typesafe` |
+
 ## Basic trading tasks, with gates
 
 A worked example of the whole loop on something less forgiving than support tickets. These are real:

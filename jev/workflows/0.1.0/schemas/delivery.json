@@ -1,0 +1,233 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.taifoon.io/schemas/coordination/v1/delivery.json",
+  "title": "DELIVERY — what came back, and the digest that seals it",
+  "description": "The work product: the reply held off-chain (handshake dispatch) or the digest / memo the seller submitted on chain. digest.value is the evidenceDigest submit(jobId, evidenceDigest) seals — the reply the buyer read and the digest on chain are one thing.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "taifoon.delivery.v1",
+      "x-stage": "L",
+      "x-source": "this contract",
+      "description": "which canonical entity this record is; fixed per schema"
+    },
+    "job": {
+      "$ref": "common.json#/$defs/job_ref",
+      "x-stage": "S1",
+      "x-source": "the hire it answers"
+    },
+    "handshake_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^hs_[0-9a-f]{24}$",
+      "x-stage": "L",
+      "x-source": "coordd dlv:<hs>"
+    },
+    "delivered": {
+      "type": "boolean",
+      "x-stage": "S1",
+      "x-source": "a reply was held (status ready + digest) or JobSubmitted / memo phase EVALUATION / hook Submitted exists"
+    },
+    "transport": {
+      "enum": [
+        "mcp.tools/call",
+        "mcp.initialize",
+        "a2a.message/send",
+        "a2a.tasks/send",
+        "x402.wall",
+        "webhook",
+        "erc8183.submit",
+        "hook.submit",
+        "memo-acp.memo",
+        "olas.subgraph",
+        "grid.probe",
+        "none"
+      ],
+      "x-stage": "L",
+      "x-source": "wire-client protocol + tool; or the on-chain submit"
+    },
+    "status": {
+      "enum": [
+        "ready",
+        "x402",
+        "silent",
+        "unreachable",
+        "submitted",
+        "none"
+      ],
+      "x-stage": "L",
+      "x-source": "wire-client WireStatus; submitted = on-chain submission; none = nothing"
+    },
+    "digest": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "common.json#/$defs/bytes32"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "algo": {
+          "enum": [
+            "keccak256-utf8",
+            "bytes32-onchain",
+            "none"
+          ]
+        }
+      },
+      "required": [
+        "value",
+        "algo"
+      ],
+      "additionalProperties": false,
+      "x-stage": "S1",
+      "x-source": "keccak256(reply text) (wire-client replyDigest) = hook Submitted.evidenceDigest; ERC-8183 JobSubmitted.deliverable"
+    },
+    "content": {
+      "type": "object",
+      "properties": {
+        "head": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "chars": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "full_available": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "head",
+        "chars",
+        "url",
+        "full_available"
+      ],
+      "additionalProperties": false,
+      "x-stage": "L",
+      "x-source": "reply_head (≤400) · reply_chars · memo deliverable URL (acpx memo-contents) · whether the full text is held (coordd, ≤100 kB)"
+    },
+    "tool": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "x-stage": "L",
+      "x-source": "MCP tool called"
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "x-stage": "L",
+      "x-source": "wire-client reason: why nothing came back, or a reply flag (the tool reported isError)"
+    },
+    "request": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "x-stage": "L",
+      "x-source": "the request as sent: tool + args (MCP) or text (A2A)"
+    },
+    "submitted_at": {
+      "anyOf": [
+        {
+          "$ref": "common.json#/$defs/unix_s"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "x-stage": "S1",
+      "x-source": "JobSubmitted block ts / delivery at"
+    },
+    "latency_ms": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "x-stage": "L",
+      "x-source": "wire round trip"
+    },
+    "attestation": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "served": {
+          "type": "boolean"
+        },
+        "verified": {
+          "type": "boolean"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "required",
+        "served",
+        "verified",
+        "source"
+      ],
+      "additionalProperties": false,
+      "x-stage": "S8",
+      "x-source": "the seller enclave as the registry knew it at dispatch (Delivery.attestation)"
+    },
+    "anchors": {
+      "type": "array",
+      "items": {
+        "$ref": "common.json#/$defs/anchor"
+      },
+      "x-stage": "S1",
+      "x-source": "JobSubmitted / Submitted tx; coordd dlv:<hs>"
+    },
+    "source": {
+      "$ref": "common.json#/$defs/source",
+      "x-stage": "L",
+      "x-source": "the mapper"
+    }
+  },
+  "required": [
+    "schema",
+    "job",
+    "handshake_id",
+    "delivered",
+    "transport",
+    "status",
+    "digest",
+    "content",
+    "tool",
+    "reason",
+    "request",
+    "submitted_at",
+    "latency_ms",
+    "attestation",
+    "anchors",
+    "source"
+  ],
+  "additionalProperties": false
+}

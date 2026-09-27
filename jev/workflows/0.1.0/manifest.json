@@ -1,0 +1,151 @@
+{
+  "bundle": "jev-workflows-0.1.0",
+  "package": "@taifoon/jev@0.1.0",
+  "workflows": [
+    {
+      "file": "hire-judge-settle.json",
+      "source_id": "tfnhiresettle001",
+      "name": "Taifoon — HIRE → JUDGE → SETTLE (devnet 36927)",
+      "sha256": "013f382c33e9b54f7585dac5811f8d8a544c8e5e8315eb51335e0539e81dc148",
+      "nodes": 17,
+      "packages": [
+        "n8n-nodes-taifoon",
+        "@taifoon/n8n-nodes-typesafe",
+        "n8n-nodes-taifoon-devnet-signer"
+      ],
+      "builtins": [
+        "manualTrigger v1",
+        "set v3.4",
+        "code v2",
+        "if v2.2"
+      ],
+      "credentials": [
+        "taifoonRelayerApi",
+        "taifoonTypeSafeApi",
+        "taifoonDevnetKeyApi"
+      ]
+    },
+    {
+      "file": "jev-grader.json",
+      "source_id": "tfnjevgrader0001",
+      "name": "Taifoon — Jev on-chain grader (grade → stamp → devnet)",
+      "sha256": "06159f5ee2ea51644d1cca6cbdc79024fb565bee0720e622f97e52a28652c98d",
+      "nodes": 11,
+      "packages": [
+        "n8n-nodes-taifoon",
+        "@taifoon/n8n-nodes-typesafe",
+        "n8n-nodes-taifoon-devnet-signer"
+      ],
+      "builtins": [
+        "manualTrigger v1",
+        "code v2",
+        "if v2.2"
+      ],
+      "credentials": [
+        "taifoonRelayerApi",
+        "taifoonTypeSafeApi",
+        "taifoonDevnetKeyApi"
+      ]
+    },
+    {
+      "file": "batch-judge.json",
+      "source_id": "tfnbatchjudge001",
+      "name": "Taifoon — batch judge scores for the coordination layer (TypeSafe/Jev)",
+      "sha256": "8e66a8e261e9f1f8052bd0b7658cb2ef5212d8df89b8a5347b56762701f078fd",
+      "nodes": 8,
+      "packages": [
+        "n8n-nodes-taifoon",
+        "@taifoon/n8n-nodes-typesafe"
+      ],
+      "builtins": [
+        "manualTrigger v1",
+        "code v2",
+        "if v2.2",
+        "httpRequest v4.2"
+      ],
+      "credentials": [
+        "taifoonRelayerApi",
+        "taifoonTypeSafeApi"
+      ]
+    },
+    {
+      "file": "stamp-grade.json",
+      "source_id": "tfnstamp00000001",
+      "name": "Taifoon — Stamp Grade (a recorded verdict → GradeStampRegistry on the devnet)",
+      "sha256": "4464558aa9593b2bf3f2cbb6b95a0c7d2ab83c549947f96195322624da7028e4",
+      "nodes": 5,
+      "packages": [
+        "n8n-nodes-taifoon",
+        "n8n-nodes-taifoon-devnet-signer"
+      ],
+      "builtins": [
+        "manualTrigger v1",
+        "code v2"
+      ],
+      "credentials": [
+        "taifoonDevnetKeyApi"
+      ]
+    }
+  ],
+  "schemas": [
+    {
+      "file": "schemas/answers.json",
+      "$id": "https://www.taifoon.io/schemas/coordination/v1/answers.json",
+      "sha256": "3b0aeda27c39da1bcdeba73fc787e43c30403b427cde5545211bbd0cb0488a98"
+    },
+    {
+      "file": "schemas/common.json",
+      "$id": "https://www.taifoon.io/schemas/coordination/v1/common.json",
+      "sha256": "f878716e57b18f054cc0bed82a84d0c276e86ef03c00aff920a5ee9c9271867c"
+    },
+    {
+      "file": "schemas/delivery.json",
+      "$id": "https://www.taifoon.io/schemas/coordination/v1/delivery.json",
+      "sha256": "9c8adcc0e4c525dc750946de5c51cae51b0f513b85e760aa86e3254b8fde7e37"
+    },
+    {
+      "file": "schemas/facts.json",
+      "$id": "https://www.taifoon.io/schemas/coordination/v1/facts.json",
+      "sha256": "d84e0fcbdf661c69dc6ee09a45603236749cbabae16107005a8b70d51d2401f1"
+    },
+    {
+      "file": "schemas/hire.json",
+      "$id": "https://www.taifoon.io/schemas/coordination/v1/hire.json",
+      "sha256": "3951cd490e0e72a5ecd7efe8ba6de71a829011660f57147e0b17ffe5f0bb1143"
+    },
+    {
+      "file": "schemas/job.json",
+      "$id": "https://www.taifoon.io/schemas/coordination/v1/job.json",
+      "sha256": "12deb4119582da6e23229484d53e3fbd370becee6ef9a0bd31f1bec071701397"
+    },
+    {
+      "file": "schemas/settlement.json",
+      "$id": "https://www.taifoon.io/schemas/coordination/v1/settlement.json",
+      "sha256": "6063c33c2739a416a01af90e0b38c63218437b955feb8e457b067f4351faa3cc"
+    },
+    {
+      "file": "schemas/verdict.json",
+      "$id": "https://www.taifoon.io/schemas/coordination/v1/verdict.json",
+      "sha256": "d8f5aee5a2e9c5146095c4061e3e463a232fda77f9031ba336959b70c906bd09"
+    }
+  ],
+  "packages": {
+    "@taifoon/n8n-nodes-typesafe": {
+      "tested": "1.3.0",
+      "where": "npm (community node): npm i @taifoon/n8n-nodes-typesafe"
+    },
+    "n8n-nodes-taifoon": {
+      "tested": "0.4.2",
+      "where": "custom extension (type prefix CUSTOM.); not on npm"
+    },
+    "n8n-nodes-taifoon-devnet-signer": {
+      "tested": "0.2.0",
+      "where": "custom extension (type prefix CUSTOM.); not on npm"
+    }
+  },
+  "credentials": {
+    "taifoonTypeSafeApi": "your TypeSafe key (console.typesafe.ai) — credential type \"TypeSafe API\" of @taifoon/n8n-nodes-typesafe",
+    "taifoonRelayerApi": "a Taifoon relayer key (tfr_…) for https://www.taifoon.io/v1 — credential type \"Taifoon Relayer API\" of n8n-nodes-taifoon",
+    "taifoonDevnetKeyApi": "a devnet 36927 key with gas from https://faucet.taifoon.dev — credential type \"Taifoon Devnet Key API\" of n8n-nodes-taifoon-devnet-signer"
+  }
+}
