@@ -13,7 +13,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Replace with your dispute: the order, what the buyer says, what the seller can show.\nreturn [{ json: {\n  order: 'Order 1142: wireless headphones, 89 EUR, delivered 2026-09-20',\n  complaint: 'The left earbud does not charge. I want a refund.',\n  evidence: 'Carrier: delivered and signed 2026-09-20. Seller photo before shipping shows both earbuds at 100 %. No return has been opened.',\n} }];"
+        "jsCode": "// Replace with your dispute: the order, what the buyer says, what the seller can show.\nreturn [{ pairedItem: { item: 0 }, json: {\n  order: 'Order 1142: wireless headphones, 89 EUR, delivered 2026-09-20',\n  complaint: 'The left earbud does not charge. I want a refund.',\n  evidence: 'Carrier: delivered and signed 2026-09-20. Seller photo before shipping shows both earbuds at 100 %. No return has been opened.',\n} }];"
       },
       "name": "The dispute",
       "type": "n8n-nodes-base.code",

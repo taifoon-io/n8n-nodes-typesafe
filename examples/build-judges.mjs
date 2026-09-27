@@ -33,14 +33,14 @@ const criteria = j.criteria.map((c, i) => \`\${i + 1}. \${c}\`).join('\\n');
 const state = ['task: ' + j.task, 'acceptance criteria:\\n' + criteria, j.source ? 'source:\\n' + j.source : '', 'delivered:\\n' + (j.delivered || '(nothing was delivered)')].filter(Boolean).join('\\n\\n');
 const checks = {};
 for (const [name, ok] of Object.entries(j.checks || {})) checks[name] = !!ok;
-return [{ json: { ...j, state, facts: { delivered: !!(j.delivered && String(j.delivered).trim()), checks } } }];`;
+return [{ pairedItem: { item: 0 }, json: { ...j, state, facts: { delivered: !!(j.delivered && String(j.delivered).trim()), checks } } }];`;
 
 const T = {};
 
 T['judge-agent-delivery'] = workflow('Grade an AI agent\'s delivered work (Jev judge)', [
   manual(at(0, 420)),
   code('The job', `// Replace with your job: what was asked, what "done" means, what came back.
-return [{ json: {
+return [{ pairedItem: { item: 0 }, json: {
   ref: 'job-4711',
   task: 'Extract the invoice into JSON with invoice_no, total, currency and due_date',
   criteria: ['Returns one JSON object with exactly the four fields', 'Every value matches the source invoice', 'due_date is ISO 8601'],
@@ -62,7 +62,7 @@ T['judge-base-job'] = workflow('Grade a Base agent job from its on-chain record 
 const fact = (re) => (e.facts.find(([k]) => re.test(k)) || [])[1] || '';
 const delivered = !!fact(/what was delivered/i) && !/nothing|not delivered/i.test(fact(/what was delivered/i));
 const job = $('Which job').first().json;
-return [{ json: { state: e.state, ref: job.job, chainId: Number(job.chain), jobId: (job.job.match(/(\\d+)$/) || [])[1] || job.job,
+return [{ pairedItem: { item: 0 }, json: { state: e.state, ref: job.job, chainId: Number(job.chain), jobId: (job.job.match(/(\\d+)$/) || [])[1] || job.job,
   facts: { delivered, checks: { funded: /funded/i.test(fact(/^funded$/i)) || !!fact(/^funded$/i), submitted: !!fact(/^submitted$/i) } } } }];`, at(660, 420)),
   typesafe({ state: '={{ $json.state }}', jev: { rubric: true, subject: '={{ $json.ref }}', chainId: '={{ $json.chainId }}', factsJson: '={{ JSON.stringify($json.facts) }}', evaluator: 'bitagent-erc8183', jobId: '={{ $json.jobId }}' } }, at(900, 420)),
   noop('Complete: sign the evaluator call', at(1140, 240)), noop('Reject: sign the evaluator call', at(1140, 420)), noop('Needs review: nothing ends, appeal', at(1140, 600)),
@@ -74,7 +74,7 @@ T['judge-answer-factcheck'] = workflow('Fact-check a chatbot answer before it sh
   { parameters: { httpMethod: 'POST', path: 'factcheck', responseMode: 'responseNode', options: {} }, name: 'Answer to check', type: 'n8n-nodes-base.webhook', typeVersion: 2, position: at(0, 420), webhookId: 'factcheck' },
   code('Question, source, answer', `// POST { question, source, answer }. Sample used when you run it by hand.
 const b = $input.first().json.body || {};
-return [{ json: {
+return [{ pairedItem: { item: 0 }, json: {
   question: b.question || 'Can I return a sale item?',
   source: b.source || 'Returns: full-price items within 30 days. Sale items are final and cannot be returned.',
   answer: b.answer || 'Yes, sale items can be returned within 30 days for a full refund.',
@@ -92,7 +92,7 @@ return [{ json: {
 T['judge-refund-dispute'] = workflow('Refund-dispute judge (Jev judge)', [
   manual(at(0, 420)),
   code('The dispute', `// Replace with your dispute: the order, what the buyer says, what the seller can show.
-return [{ json: {
+return [{ pairedItem: { item: 0 }, json: {
   order: 'Order 1142: wireless headphones, 89 EUR, delivered 2026-09-20',
   complaint: 'The left earbud does not charge. I want a refund.',
   evidence: 'Carrier: delivered and signed 2026-09-20. Seller photo before shipping shows both earbuds at 100 %. No return has been opened.',
@@ -108,7 +108,7 @@ return [{ json: {
 T['judge-extraction-qa'] = workflow('QA an extraction against its source document (Jev judge)', [
   manual(at(0, 420)),
   code('Document and extraction', `// Replace with your document text and the fields your extractor (OCR, LLM, parser) produced.
-return [{ json: {
+return [{ pairedItem: { item: 0 }, json: {
   document: 'INVOICE INV-20931\\nIssued 2026-09-01 by Northwind Parts GmbH\\nTotal due: EUR 1,240.50\\nPayment due by 2026-10-01',
   extracted: { invoice_no: 'INV-20931', total: 1240.5, currency: 'EUR', due_date: '2026-10-01' },
 } }];`, at(220, 420)),
@@ -127,7 +127,7 @@ T['judge-freelancer-deliverable'] = workflow('Accept or return a freelancer\'s d
     { fieldLabel: 'Deliverable (text or link contents)', fieldType: 'textarea', requiredField: true },
   ] }, options: {} }, name: 'Deliverable form', type: 'n8n-nodes-base.formTrigger', typeVersion: 2.2, position: at(0, 420), webhookId: 'deliverable-form' },
   code('The job', `const f = $input.first().json;
-return [{ json: {
+return [{ pairedItem: { item: 0 }, json: {
   ref: 'delivery-' + Date.now(),
   task: f['Brief'],
   criteria: String(f['Acceptance criteria (one per line)'] || '').split('\\n').map((s) => s.trim()).filter(Boolean),
@@ -149,7 +149,7 @@ const rows = [
   { ref: 'S-2', task: 'Summarise the attached article in three bullet points', criteria: 'Exactly three bullets\\nEach bullet states a claim from the article', delivered: '' },
 ];
 return rows.map((r) => ({ json: { ...r, criteria: r.criteria.split('\\n'), checks: { not_empty: !!r.delivered.trim() } } }));`, at(220, 420)),
-  { ...code('What the judge reads', PACK.replace('$input.first().json', '$json').replace('return [{ json: { ...j, state', 'return { json: { ...j, state').replace('} }];', '} };'), at(440, 420)), parameters: { mode: 'runOnceForEachItem', jsCode: PACK.replace('$input.first().json', '$json').replace('return [{ json: { ...j, state', 'return { json: { ...j, state').replace('} }];', '} };') } },
+  { ...code('What the judge reads', PACK.replace('$input.first().json', '$json').replace('return [{ pairedItem: { item: 0 }, json: { ...j, state', 'return { json: { ...j, state').replace('} }];', '} };'), at(440, 420)), parameters: { mode: 'runOnceForEachItem', jsCode: PACK.replace('$input.first().json', '$json').replace('return [{ pairedItem: { item: 0 }, json: { ...j, state', 'return { json: { ...j, state').replace('} }];', '} };') } },
   typesafe({ state: '={{ $json.state }}', jev: { rubric: true, subject: '={{ $json.ref }}', factsJson: '={{ JSON.stringify($json.facts) }}' } }, at(700, 420)),
   ...exits('Complete', 'Reject', 'Needs review'),
   note('How it works', '## Grade many submissions at once\n\nEach row is graded on its own: code checks first, then TypeSafe (Jev) answers the rubric with full probabilities. Every item leaves with its verdict and a receipt.\n\nFor a sheet: read rows with Google Sheets, and write `jev.verdict` and `jev.receipt.receiptHash` back after each exit. Your own TypeSafe key only.', at(200, 40), 520, 260),
@@ -158,7 +158,7 @@ return rows.map((r) => ({ json: { ...r, criteria: r.criteria.split('\\n'), check
 T['judge-translation'] = workflow('Check a translation keeps its meaning (Jev judge)', [
   manual(at(0, 420)),
   code('Source and translation', `// Replace with your strings.
-return [{ json: {
+return [{ pairedItem: { item: 0 }, json: {
   source_text: 'Refunds are processed within 14 days of receiving the returned item.',
   translation: 'Rückerstattungen werden innerhalb von 14 Tagen nach Eingang des zurückgesandten Artikels bearbeitet.',
   target_language: 'German',
@@ -175,7 +175,7 @@ T['judge-moderation'] = workflow('Moderate posts against your own rules (Jev jud
   { parameters: { httpMethod: 'POST', path: 'moderate', options: {} }, name: 'New post', type: 'n8n-nodes-base.webhook', typeVersion: 2, position: at(0, 420), webhookId: 'moderate' },
   code('Post and rules', `// POST { post }. Your rules, in your words: each one becomes a yes/no question.
 const post = ($input.first().json.body || {}).post || 'Selling my old bike, DM me. Also here is my neighbour\\'s phone: 0171 555 0199';
-return [{ json: { post, rules: '1. No spam or ads outside the market channel. 2. No harassment. 3. No one else\\'s personal data.' } }];`, at(220, 420)),
+return [{ pairedItem: { item: 0 }, json: { post, rules: '1. No spam or ads outside the market channel. 2. No harassment. 3. No one else\\'s personal data.' } }];`, at(220, 420)),
   typesafe({ state: '={{ JSON.stringify($json) }}', questionsJson: JSON.stringify([
     { id: 'spam', kind: 'noul', text: 'Is the post spam or an advert?' },
     { id: 'harassment', kind: 'noul', text: 'Does the post harass or insult someone?' },

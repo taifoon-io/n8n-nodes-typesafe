@@ -13,7 +13,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Replace with your job: what was asked, what \"done\" means, what came back.\nreturn [{ json: {\n  ref: 'job-4711',\n  task: 'Extract the invoice into JSON with invoice_no, total, currency and due_date',\n  criteria: ['Returns one JSON object with exactly the four fields', 'Every value matches the source invoice', 'due_date is ISO 8601'],\n  source: 'INVOICE INV-20931 · Total due: EUR 1,240.50 · Payment due by 2026-10-01',\n  delivered: '{\"invoice_no\":\"INV-20931\",\"total\":1240.50,\"currency\":\"EUR\",\"due_date\":\"2026-10-01\"}',\n  checks: { parses_as_json: true },\n} }];"
+        "jsCode": "// Replace with your job: what was asked, what \"done\" means, what came back.\nreturn [{ pairedItem: { item: 0 }, json: {\n  ref: 'job-4711',\n  task: 'Extract the invoice into JSON with invoice_no, total, currency and due_date',\n  criteria: ['Returns one JSON object with exactly the four fields', 'Every value matches the source invoice', 'due_date is ISO 8601'],\n  source: 'INVOICE INV-20931 · Total due: EUR 1,240.50 · Payment due by 2026-10-01',\n  delivered: '{\"invoice_no\":\"INV-20931\",\"total\":1240.50,\"currency\":\"EUR\",\"due_date\":\"2026-10-01\"}',\n  checks: { parses_as_json: true },\n} }];"
       },
       "name": "The job",
       "type": "n8n-nodes-base.code",
@@ -25,7 +25,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const j = $input.first().json;\nconst criteria = j.criteria.map((c, i) => `${i + 1}. ${c}`).join('\\n');\nconst state = ['task: ' + j.task, 'acceptance criteria:\\n' + criteria, j.source ? 'source:\\n' + j.source : '', 'delivered:\\n' + (j.delivered || '(nothing was delivered)')].filter(Boolean).join('\\n\\n');\nconst checks = {};\nfor (const [name, ok] of Object.entries(j.checks || {})) checks[name] = !!ok;\nreturn [{ json: { ...j, state, facts: { delivered: !!(j.delivered && String(j.delivered).trim()), checks } } }];"
+        "jsCode": "const j = $input.first().json;\nconst criteria = j.criteria.map((c, i) => `${i + 1}. ${c}`).join('\\n');\nconst state = ['task: ' + j.task, 'acceptance criteria:\\n' + criteria, j.source ? 'source:\\n' + j.source : '', 'delivered:\\n' + (j.delivered || '(nothing was delivered)')].filter(Boolean).join('\\n\\n');\nconst checks = {};\nfor (const [name, ok] of Object.entries(j.checks || {})) checks[name] = !!ok;\nreturn [{ pairedItem: { item: 0 }, json: { ...j, state, facts: { delivered: !!(j.delivered && String(j.delivered).trim()), checks } } }];"
       },
       "name": "What the judge reads",
       "type": "n8n-nodes-base.code",

@@ -36,7 +36,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const f = $input.first().json;\nreturn [{ json: {\n  ref: 'delivery-' + Date.now(),\n  task: f['Brief'],\n  criteria: String(f['Acceptance criteria (one per line)'] || '').split('\\n').map((s) => s.trim()).filter(Boolean),\n  delivered: f['Deliverable (text or link contents)'],\n  checks: { not_empty: !!String(f['Deliverable (text or link contents)'] || '').trim() },\n} }];"
+        "jsCode": "const f = $input.first().json;\nreturn [{ pairedItem: { item: 0 }, json: {\n  ref: 'delivery-' + Date.now(),\n  task: f['Brief'],\n  criteria: String(f['Acceptance criteria (one per line)'] || '').split('\\n').map((s) => s.trim()).filter(Boolean),\n  delivered: f['Deliverable (text or link contents)'],\n  checks: { not_empty: !!String(f['Deliverable (text or link contents)'] || '').trim() },\n} }];"
       },
       "name": "The job",
       "type": "n8n-nodes-base.code",
@@ -48,7 +48,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const j = $input.first().json;\nconst criteria = j.criteria.map((c, i) => `${i + 1}. ${c}`).join('\\n');\nconst state = ['task: ' + j.task, 'acceptance criteria:\\n' + criteria, j.source ? 'source:\\n' + j.source : '', 'delivered:\\n' + (j.delivered || '(nothing was delivered)')].filter(Boolean).join('\\n\\n');\nconst checks = {};\nfor (const [name, ok] of Object.entries(j.checks || {})) checks[name] = !!ok;\nreturn [{ json: { ...j, state, facts: { delivered: !!(j.delivered && String(j.delivered).trim()), checks } } }];"
+        "jsCode": "const j = $input.first().json;\nconst criteria = j.criteria.map((c, i) => `${i + 1}. ${c}`).join('\\n');\nconst state = ['task: ' + j.task, 'acceptance criteria:\\n' + criteria, j.source ? 'source:\\n' + j.source : '', 'delivered:\\n' + (j.delivered || '(nothing was delivered)')].filter(Boolean).join('\\n\\n');\nconst checks = {};\nfor (const [name, ok] of Object.entries(j.checks || {})) checks[name] = !!ok;\nreturn [{ pairedItem: { item: 0 }, json: { ...j, state, facts: { delivered: !!(j.delivered && String(j.delivered).trim()), checks } } }];"
       },
       "name": "What the judge reads",
       "type": "n8n-nodes-base.code",

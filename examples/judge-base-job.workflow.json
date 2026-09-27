@@ -54,7 +54,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const e = $input.first().json;\nconst fact = (re) => (e.facts.find(([k]) => re.test(k)) || [])[1] || '';\nconst delivered = !!fact(/what was delivered/i) && !/nothing|not delivered/i.test(fact(/what was delivered/i));\nconst job = $('Which job').first().json;\nreturn [{ json: { state: e.state, ref: job.job, chainId: Number(job.chain), jobId: (job.job.match(/(\\d+)$/) || [])[1] || job.job,\n  facts: { delivered, checks: { funded: /funded/i.test(fact(/^funded$/i)) || !!fact(/^funded$/i), submitted: !!fact(/^submitted$/i) } } } }];"
+        "jsCode": "const e = $input.first().json;\nconst fact = (re) => (e.facts.find(([k]) => re.test(k)) || [])[1] || '';\nconst delivered = !!fact(/what was delivered/i) && !/nothing|not delivered/i.test(fact(/what was delivered/i));\nconst job = $('Which job').first().json;\nreturn [{ pairedItem: { item: 0 }, json: { state: e.state, ref: job.job, chainId: Number(job.chain), jobId: (job.job.match(/(\\d+)$/) || [])[1] || job.job,\n  facts: { delivered, checks: { funded: /funded/i.test(fact(/^funded$/i)) || !!fact(/^funded$/i), submitted: !!fact(/^submitted$/i) } } } }];"
       },
       "name": "Facts from the chain",
       "type": "n8n-nodes-base.code",

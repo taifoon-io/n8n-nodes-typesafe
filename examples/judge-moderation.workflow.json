@@ -18,7 +18,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// POST { post }. Your rules, in your words: each one becomes a yes/no question.\nconst post = ($input.first().json.body || {}).post || 'Selling my old bike, DM me. Also here is my neighbour\\'s phone: 0171 555 0199';\nreturn [{ json: { post, rules: '1. No spam or ads outside the market channel. 2. No harassment. 3. No one else\\'s personal data.' } }];"
+        "jsCode": "// POST { post }. Your rules, in your words: each one becomes a yes/no question.\nconst post = ($input.first().json.body || {}).post || 'Selling my old bike, DM me. Also here is my neighbour\\'s phone: 0171 555 0199';\nreturn [{ pairedItem: { item: 0 }, json: { post, rules: '1. No spam or ads outside the market channel. 2. No harassment. 3. No one else\\'s personal data.' } }];"
       },
       "name": "Post and rules",
       "type": "n8n-nodes-base.code",

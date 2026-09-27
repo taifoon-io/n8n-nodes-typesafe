@@ -13,7 +13,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Replace with your document text and the fields your extractor (OCR, LLM, parser) produced.\nreturn [{ json: {\n  document: 'INVOICE INV-20931\\nIssued 2026-09-01 by Northwind Parts GmbH\\nTotal due: EUR 1,240.50\\nPayment due by 2026-10-01',\n  extracted: { invoice_no: 'INV-20931', total: 1240.5, currency: 'EUR', due_date: '2026-10-01' },\n} }];"
+        "jsCode": "// Replace with your document text and the fields your extractor (OCR, LLM, parser) produced.\nreturn [{ pairedItem: { item: 0 }, json: {\n  document: 'INVOICE INV-20931\\nIssued 2026-09-01 by Northwind Parts GmbH\\nTotal due: EUR 1,240.50\\nPayment due by 2026-10-01',\n  extracted: { invoice_no: 'INV-20931', total: 1240.5, currency: 'EUR', due_date: '2026-10-01' },\n} }];"
       },
       "name": "Document and extraction",
       "type": "n8n-nodes-base.code",

@@ -65,7 +65,7 @@ the file in n8n (**Workflows → Import from File**), pick your **TypeSafe API**
 
 Workflows 1, 2, 4 and 7 use **Jev Options → Ask RUBRIC_v1**: code checks the facts first, Jev answers four closed
 questions, and the verdict comes with a receipt anyone can recompute. The others ask your own Noul questions and route
-them with thresholds. Every file is tested end to end in [`test/templates.test.mjs`](test/templates.test.mjs).
+them with thresholds. Every file is tested end to end in [`test/templates.test.mjs`](test/templates.test.mjs), and imported and run in n8n 1.123.82.
 
 ## Three kinds of question
 

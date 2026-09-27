@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// POST { question, source, answer }. Sample used when you run it by hand.\nconst b = $input.first().json.body || {};\nreturn [{ json: {\n  question: b.question || 'Can I return a sale item?',\n  source: b.source || 'Returns: full-price items within 30 days. Sale items are final and cannot be returned.',\n  answer: b.answer || 'Yes, sale items can be returned within 30 days for a full refund.',\n} }];"
+        "jsCode": "// POST { question, source, answer }. Sample used when you run it by hand.\nconst b = $input.first().json.body || {};\nreturn [{ pairedItem: { item: 0 }, json: {\n  question: b.question || 'Can I return a sale item?',\n  source: b.source || 'Returns: full-price items within 30 days. Sale items are final and cannot be returned.',\n  answer: b.answer || 'Yes, sale items can be returned within 30 days for a full refund.',\n} }];"
       },
       "name": "Question, source, answer",
       "type": "n8n-nodes-base.code",

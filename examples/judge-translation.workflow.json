@@ -13,7 +13,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Replace with your strings.\nreturn [{ json: {\n  source_text: 'Refunds are processed within 14 days of receiving the returned item.',\n  translation: 'Rückerstattungen werden innerhalb von 14 Tagen nach Eingang des zurückgesandten Artikels bearbeitet.',\n  target_language: 'German',\n} }];"
+        "jsCode": "// Replace with your strings.\nreturn [{ pairedItem: { item: 0 }, json: {\n  source_text: 'Refunds are processed within 14 days of receiving the returned item.',\n  translation: 'Rückerstattungen werden innerhalb von 14 Tagen nach Eingang des zurückgesandten Artikels bearbeitet.',\n  target_language: 'German',\n} }];"
       },
       "name": "Source and translation",
       "type": "n8n-nodes-base.code",
