@@ -70,6 +70,72 @@ return [{ pairedItem: { item: 0 }, json: { state: e.state, ref: job.job, chainId
 ], [link('Start', 'Which job'), link('Which job', 'Read its record (public)'), link('Read its record (public)', 'Facts from the chain'), link('Facts from the chain', 'TypeSafe'),
   link('TypeSafe', 'Complete: sign the evaluator call', 0), link('TypeSafe', 'Reject: sign the evaluator call', 1), link('TypeSafe', 'Needs review: nothing ends, appeal', 2)], [{ name: 'Web3' }, { name: 'AI agents' }, { name: 'Judge' }]);
 
+// E: the same Base job, graded in two steps through the coordination layer so the grade can be recorded on Base.
+// Prepare (public) → your TypeSafe key answers → Answers (your Taifoon relayer key, record: 'base') → the Base transactions.
+const LAYER = 'https://coord.taifoon.dev/v1';
+T['judge-base-job-record'] = workflow('Grade a Base agent job and record the grade on Base (Jev judge)', [
+  manual(at(0, 420)),
+  { parameters: { assignments: { assignments: [
+    { id: 'c', name: 'chain', value: 8453, type: 'number' },
+    { id: 'j', name: 'job', value: 'bitagent:8453:7287', type: 'string' },
+    { id: 'p', name: 'price_usdc', value: 1.5, type: 'number' },
+    { id: 'r', name: 'record', value: 'base', type: 'string' },
+  ] }, options: {} }, name: 'Which job', type: 'n8n-nodes-base.set', typeVersion: 3.4, position: at(220, 420) },
+  { parameters: { method: 'POST', url: `${LAYER}/judge/compose`, sendBody: true, specifyBody: 'json',
+    jsonBody: '={{ JSON.stringify({ jobId: $json.job, chainId: $json.chain, price_usdc: $json.price_usdc, mode: "prepare" }) }}', options: {} },
+    name: 'Prepare (public)', type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: at(440, 420) },
+  { parameters: { conditions: { options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 2 }, conditions: [
+    { id: 'h', leftValue: '={{ $json.hard_fail === true }}', rightValue: '', operator: { type: 'boolean', operation: 'true', singleValue: true } }], combinator: 'and' }, options: {} },
+    name: 'Hard fail?', type: 'n8n-nodes-base.if', typeVersion: 2.2, position: at(660, 420) },
+  typesafe({ state: '={{ JSON.stringify($json.jev.state) }}', questionsJson: '={{ JSON.stringify($json.jev.questions) }}' }, at(880, 520)),
+  { parameters: { method: 'POST', url: `${LAYER}/judge/compose`, authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth', sendBody: true, specifyBody: 'json',
+    jsonBody: `={{ JSON.stringify({ jobId: $('Which job').first().json.job, chainId: $('Which job').first().json.chain, price_usdc: $('Which job').first().json.price_usdc, mode: "answers", record: $('Which job').first().json.record, answers: $json.answers, model: $json.model, answered_by: "n8n-typesafe", prepare_digest: $('Prepare (public)').first().json.prepare_digest, execution_id: $execution.id, latency_ms: $json.latency_ms }) }}`,
+    options: { response: { response: { neverError: true } } } },
+    name: 'Answers + record', type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: at(1100, 520),
+    credentials: { httpHeaderAuth: { id: '', name: 'Taifoon relayer key (header X-API-Key)' } } },
+  code('Base transactions', `// The layer queues the Base records; its recorder signs them within a minute or two. Wait for both hashes (at most 200 s).
+const r = $input.first().json;
+if (r.ok === false || !r.decision) throw new Error('the layer refused: ' + (r.code ? r.code + ': ' : '') + (r.error || JSON.stringify(r).slice(0, 300)));
+const LAYER = '${LAYER}';
+const d = r.decision; const rc = r.receipt || {};
+const want = $('Which job').first().json.record;
+const onBase = want === 'base' || want === 'both';
+const held = d.recording && d.recording.held ? d.recording.held : null;
+const get = (path) => this.helpers.httpRequest({ method: 'GET', url: LAYER + path, json: true, timeout: 30000, ignoreHttpStatusErrors: true }).catch(() => null);
+const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+let decisionBase = d.anchor_base || null; let answersBase = null;
+const until = Date.now() + 200000;
+for (let wait = 5000; onBase && !held; wait = Math.min(wait * 2, 40000)) {
+  const [dd, aa] = await Promise.all([get('/judge/decisions/' + d.id), d.answers_digest ? get('/judge/answers/' + d.answers_digest) : null]);
+  decisionBase = (dd && dd.decision && dd.decision.anchor_base) || decisionBase;
+  answersBase = (aa && aa.anchor_base) || answersBase;
+  const done = (a) => a && a.tx && a.status === 'ok';
+  if (done(decisionBase) && (!d.answers_digest || done(answersBase))) break;
+  if (Date.now() + wait > until) break;
+  await sleep(wait);
+}
+const link = (a) => (a && a.tx ? { tx: a.tx, block: a.block ?? null, status: a.status ?? null, contract: a.contract ?? null, explorer: 'https://basescan.org/tx/' + a.tx } : a ? { tx: null, status: a.status ?? 'queued', error: a.error ?? null } : null);
+const recorded = !!(decisionBase && decisionBase.tx && decisionBase.status === 'ok' && (!d.answers_digest || (answersBase && answersBase.tx && answersBase.status === 'ok')));
+return [{ pairedItem: { item: 0 }, json: {
+  job: $('Which job').first().json.job, verdict: rc.verdict || null, reasons: rc.reasons || [], receipt_hash: rc.receiptHash || null, next: r.next || null,
+  decision_id: d.id, decision_digest: d.digest, answers_digest: d.answers_digest || null,
+  record: want, recorded_on_base: recorded,
+  base: { decision: link(decisionBase), answers: link(answersBase) },
+  held: held ? held.message : null,
+  retry: recorded || !onBase ? null : 'POST ' + LAYER + '/judge/decisions/' + d.id + '/base (same X-API-Key) puts this decision and its answers on Base later',
+  verify: LAYER + '/judge/decisions/' + d.id,
+} }];`, at(1320, 520)),
+  { parameters: { conditions: { options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 2 }, conditions: [
+    { id: 'b', leftValue: '={{ $json.recorded_on_base }}', rightValue: '', operator: { type: 'boolean', operation: 'true', singleValue: true } }], combinator: 'and' }, options: {} },
+    name: 'On Base?', type: 'n8n-nodes-base.if', typeVersion: 2.2, position: at(1540, 520) },
+  noop('Recorded on Base: both tx links in the output', at(1760, 420)),
+  noop('Not on Base yet: the output says why', at(1760, 620)),
+  noop('Hard fail: rejected by code, nothing to record', at(880, 300)),
+  note('How it works', '## Grade a Base job, and put the grade on Base\n\n1. **Prepare** (public, no key): the layer reads the job from chain, code decides the facts, and it returns the exact text and the four RUBRIC_v1 questions.\n2. **TypeSafe (Jev)** answers them on **your own TypeSafe key**.\n3. **Answers + record** sends the answers with **your Taifoon relayer key** and `record: base`. The layer composes the verdict, and its recorder writes the decision (JevDecisionLog) and the answers (JevAnswerLog) on Base. Base recording is metered by a daily budget; over it, the output says so and how to retry.\n4. **Base transactions** waits for both hashes and links them on basescan.\n\nSet **record** in *Which job* to `none` to grade without writing anything on chain.', at(160, -40), 620, 360),
+], [link('Start', 'Which job'), link('Which job', 'Prepare (public)'), link('Prepare (public)', 'Hard fail?'), link('Hard fail?', 'Hard fail: rejected by code, nothing to record', 0), link('Hard fail?', 'TypeSafe', 1),
+  link('TypeSafe', 'Answers + record'), link('Answers + record', 'Base transactions'), link('Base transactions', 'On Base?'),
+  link('On Base?', 'Recorded on Base: both tx links in the output', 0), link('On Base?', 'Not on Base yet: the output says why', 1)], [{ name: 'Web3' }, { name: 'AI agents' }, { name: 'Judge' }]);
+
 T['judge-answer-factcheck'] = workflow('Fact-check a chatbot answer before it ships (Jev judge)', [
   { parameters: { httpMethod: 'POST', path: 'factcheck', responseMode: 'responseNode', options: {} }, name: 'Answer to check', type: 'n8n-nodes-base.webhook', typeVersion: 2, position: at(0, 420), webhookId: 'factcheck' },
   code('Question, source, answer', `// POST { question, source, answer }. Sample used when you run it by hand.

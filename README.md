@@ -67,6 +67,9 @@ Workflows 1, 2, 4 and 7 use **Jev Options → Ask RUBRIC_v1**: code checks the f
 questions, and the verdict comes with a receipt anyone can recompute. The others ask your own Noul questions and route
 them with thresholds. Every file is tested end to end in [`test/templates.test.mjs`](test/templates.test.mjs), and imported and run in n8n 1.123.82.
 
+Workflow 2 needs only your TypeSafe key: the evidence route is a public read. It outputs `jev.verdict`, the receipt and
+the unsigned `complete` / `reject` call for the job's evaluator seat. Nothing is signed or sent.
+
 ## Three kinds of question
 
 | You ask | You get back | Think of it as |

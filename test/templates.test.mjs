@@ -3,7 +3,7 @@
 // Checks each template: valid shape, your own key only, no Taifoon secrets, and the item leaves by the right exit.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -13,11 +13,22 @@ const load = (f) => JSON.parse(readFileSync(new URL(f, DIR), 'utf8'));
 const EVIDENCE_7287 = { ok: true, chainId: 8453, jobId: 'bitagent:8453:7287', state: 'job: ERC-8183 job 7287 …\nwhat the buyer asked: equity_research where ticker is \'AAPL\'\nwhat was delivered: a 32-byte digest',
   facts: [['what was delivered', 'a 32-byte digest 0xea97…; the content behind it is not published on chain'], ['funded', '2026-08-28 05:51:43 UTC'], ['submitted', '2026-08-28 05:51:55 UTC']] };
 
+// the coordination layer's two-step compose (judge-base-job-record), as coord.taifoon.dev/v1 answers it
+const RUBRIC_QS = [
+  { id: 'spec_met', kind: 'choice', text: 'Does the deliverable satisfy every acceptance criterion in the task?', options: 'yes, no' },
+  { id: 'unsupported_claim', kind: 'choice', text: 'Does the delivered content assert a fact the facts section does not contain?', options: 'yes, no' },
+  { id: 'ending', kind: 'choice', text: 'Which ending fits the facts and the content?', options: 'complete, reject, expire, needs_review' },
+  { id: 'cheat_shaped', kind: 'choice', text: 'Does the delivery look like concealment rather than a failed honest attempt?', options: 'yes, no' },
+];
+const PREPARE_7287 = { ok: true, mode: 'prepare', hard_fail: false, subject: 'bitagent:8453:7287', jev: { state: EVIDENCE_7287.state + '\nFACTS SECTION …', questions: RUBRIC_QS }, prepare_digest: '0x' + '54'.repeat(32) };
+const DECISION = { id: 'decision-1-abc', digest: '0x' + 'd1'.repeat(32), answers_digest: '0x' + 'a1'.repeat(32), anchor_base: { status: 'queued', tx: null }, recording: { requested: 'base', allowed: 'base', used: 'base', held: null } };
+const BASE_OK = (contract, tx) => ({ chain: 8453, contract, tx, block: 51870000, status: 'ok' });
+
 /** n8n expression "={{ … }}" → value, against the current item and earlier nodes */
 function resolve(v, json, nodeOut) {
   if (typeof v !== 'string' || !v.startsWith('=')) return v;
   const $ = (name) => ({ first: () => nodeOut[name][0] });
-  const ev = (expr) => Function('$json', '$', 'encodeURIComponent', `return (${expr});`)(json, $, encodeURIComponent);
+  const ev = (expr) => Function('$json', '$', 'encodeURIComponent', '$execution', `return (${expr});`)(json, $, encodeURIComponent, { id: '4242' });
   const whole = /^=\{\{([\s\S]*)\}\}$/.exec(v.trim());
   if (whole && !whole[1].includes('}}')) return ev(whole[1]);                    // one expression: keep its type
   return v.slice(1).replace(/\{\{([\s\S]*?)\}\}/g, (_, e) => String(ev(e)));  // text with {{ }} inside
@@ -25,9 +36,9 @@ function resolve(v, json, nodeOut) {
 const resolveDeep = (o, json, nodeOut) => (o && typeof o === 'object' && !Array.isArray(o) ? Object.fromEntries(Object.entries(o).map(([k, x]) => [k, resolveDeep(x, json, nodeOut)])) : resolve(o, json, nodeOut));
 
 /** Run one workflow. `answer(questionIds)` stubs TypeSafe: returns { [id]: answer object as TypeSafe sends it }. */
-async function runWorkflow(w, { answer, trigger = {} }) {
+async function runWorkflow(w, { answer, trigger = {}, layer = {} }) {
   const byName = Object.fromEntries(w.nodes.map((n) => [n.name, n]));
-  const nodeOut = {}; const reached = {}; const calls = [];
+  const nodeOut = {}; const reached = {}; const calls = []; const posts = []; const gets = [];
   const targets = (name, out = 0) => (w.connections[name]?.main?.[out] ?? []).map((c) => c.node);
   const start = w.nodes.find((n) => /manualTrigger|webhook|formTrigger/.test(n.type));
   const queue = [[start.name, [{ json: start.type.includes('webhook') ? { body: {} } : start.type.includes('formTrigger') ? trigger : {} }]]];
@@ -41,15 +52,30 @@ async function runWorkflow(w, { answer, trigger = {} }) {
     }
     if (n.type === 'n8n-nodes-base.httpRequest') {
       const url = resolve(n.parameters.url, items[0].json, nodeOut);
+      if ((n.parameters.method ?? 'GET') === 'POST') {
+        assert.equal(url, 'https://coord.taifoon.dev/v1/judge/compose', 'templates POST only to the compose route');
+        const body = JSON.parse(resolve(n.parameters.jsonBody, items[0].json, nodeOut));
+        posts.push({ body, auth: n.parameters.authentication === 'genericCredentialType' ? n.parameters.genericAuthType : null, creds: n.credentials ?? null });
+        const res = body.mode === 'prepare' ? (layer.prepare ?? PREPARE_7287) : (layer.answers ?? { ok: true, receipt: { verdict: 'reject', reasons: ['spec_met 0.03'], receiptHash: '0x' + 'ee'.repeat(32) }, decision: DECISION, next: 'reject: …' });
+        const o = [{ json: res }]; nodeOut[name] = o; emit(0, o); continue;
+      }
       assert.match(url, /^https:\/\/coord\.taifoon\.dev\/v1\/judge\/evidence\/8453\//, 'templates read only the public evidence route');
       const o = [{ json: EVIDENCE_7287 }]; nodeOut[name] = o; emit(0, o); continue;
+    }
+    if (n.type === 'n8n-nodes-base.if') {
+      const c = n.parameters.conditions.conditions[0];
+      const yes = [], no = [];
+      for (const it of items) (resolve(c.leftValue, it.json, nodeOut) === true ? yes : no).push(it);
+      nodeOut[name] = [...yes, ...no]; if (yes.length) emit(0, yes); if (no.length) emit(1, no); continue;
     }
     if (n.type === 'n8n-nodes-base.code') {
       const perItem = n.parameters.mode === 'runOnceForEachItem';
       const $ = (nm) => ({ first: () => nodeOut[nm][0] });
+      const self = { helpers: { httpRequest: async (req) => { gets.push(req.url); return layer.get ? layer.get(req.url) : null; } } };
+      const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
       let o;
       if (perItem) o = items.map((it) => Function('$json', '$', n.parameters.jsCode)(it.json, $));
-      else o = Function('$input', '$', n.parameters.jsCode)({ first: () => items[0], all: () => items }, $);
+      else o = await AsyncFunction('$input', '$', n.parameters.jsCode).call(self, { first: () => items[0], all: () => items }, $);
       nodeOut[name] = o; emit(0, o); continue;
     }
     if (n.type === '@taifoon/n8n-nodes-typesafe.taifoonTypeSafe') {
@@ -70,7 +96,7 @@ async function runWorkflow(w, { answer, trigger = {} }) {
     if (/noOp|respondToWebhook/.test(n.type)) { reached[name] = (reached[name] ?? 0) + items.length; continue; }
     throw new Error(`no runner for ${n.type}`);
   }
-  return { reached, calls, nodeOut };
+  return { reached, calls, nodeOut, posts, gets };
 }
 
 // TypeSafe answer shapes, as api.typesafe.ai sends them
@@ -104,6 +130,10 @@ for (const f of readdirSync(DIR).filter((x) => x.endsWith('.workflow.json'))) {
       assert.notEqual(n.parameters.connection, 'trial', 'no Free Trial');
       for (const [k, c] of Object.entries(n.credentials ?? {})) { assert.equal(k, 'taifoonTypeSafeApi'); assert.ok(!c.id, 'no credential id baked in'); }
     }
+    for (const n of w.nodes) if (n.type === 'n8n-nodes-base.httpRequest' && n.credentials) {
+      assert.deepEqual(Object.keys(n.credentials), ['httpHeaderAuth'], 'the only other credential is your relayer key as a header');
+      assert.ok(!n.credentials.httpHeaderAuth.id, 'no credential id baked in');
+    }
     assert.doesNotMatch(text, /tfr_[A-Za-z0-9]{8}|apikey_[A-Za-z0-9]{8}|sk-ant-|typesafe\.taifoon\.dev\/v1\/trial/, 'no keys, no trial relay');
     for (const [from, c] of Object.entries(w.connections)) for (const outs of c.main) for (const t of outs) assert.ok(w.nodes.some((n) => n.name === t.node), `${from} → ${t.node} exists`);
   });
@@ -129,4 +159,42 @@ test('judge-bulk-submissions: an empty submission is rejected by code without as
   const { reached, calls } = await runWorkflow(load('judge-bulk-submissions.workflow.json'), { answer: rubric('complete') });
   assert.equal(calls.length, 1, 'only the non-empty submission was asked');
   assert.deepEqual([reached['Complete'], reached['Reject']], [1, 1]);
+});
+
+const BASE_GET = (url) => url.includes('/judge/decisions/') ? { ok: true, decision: { ...DECISION, anchor_base: BASE_OK('0x209490d6A0FFC5368A42b0c2208BDCda853f6a92', '0x' + 'b1'.repeat(32)) } }
+  : { ok: true, digest: DECISION.answers_digest, anchor_base: BASE_OK('0x8e9B9cE86a2d55c10318607b0c815B7B8C66254d', '0x' + 'b2'.repeat(32)) };
+// template E needs a Taifoon key, so it ships with @taifoon/jev (examples/n8n/), not in this key-free repo; tested here in the dev tree only
+const E_FILE = new URL('../../sdk/examples/n8n/judge-base-job-record.workflow.json', import.meta.url);
+const HAS_E = existsSync(E_FILE);
+test('judge-base-job-record: prepare is keyless, answers go with the relayer key and record base, both Base txs are linked', { skip: !HAS_E && 'lives in @taifoon/jev' }, async () => {
+  const { reached, calls, posts, nodeOut } = await runWorkflow(JSON.parse(readFileSync(E_FILE, 'utf8')), { answer: rubric('reject'), layer: { get: BASE_GET } });
+  assert.equal(calls.length, 1, 'TypeSafe asked once, on your key');
+  assert.deepEqual(Object.keys(calls[0].req.body.questions).sort(), RUBRIC_QS.map((q) => q.id).sort(), 'the four questions the layer prepared');
+  assert.equal(typeof calls[0].req.body.state, 'string', 'Jev reads the prepared text as sent');
+  const [prep, ans] = posts;
+  assert.deepEqual([prep.body.mode, prep.auth, prep.creds], ['prepare', null, null], 'prepare needs no key');
+  assert.equal(ans.body.mode, 'answers'); assert.equal(ans.auth, 'httpHeaderAuth'); assert.equal(ans.body.record, 'base');
+  assert.equal(ans.body.prepare_digest, PREPARE_7287.prepare_digest); assert.equal(ans.body.answered_by, 'n8n-typesafe'); assert.equal(ans.body.execution_id, '4242');
+  assert.deepEqual(Object.keys(ans.body.answers).sort(), RUBRIC_QS.map((q) => q.id).sort());
+  const out = nodeOut['Base transactions'][0].json;
+  assert.equal(out.recorded_on_base, true);
+  assert.equal(out.base.decision.explorer, 'https://basescan.org/tx/0x' + 'b1'.repeat(32));
+  assert.equal(out.base.answers.explorer, 'https://basescan.org/tx/0x' + 'b2'.repeat(32));
+  assert.equal(reached['Recorded on Base: both tx links in the output'], 1);
+});
+test('judge-base-job-record: over the daily Base budget the grade stands and the output says why and how to retry', { skip: !HAS_E && 'lives in @taifoon/jev' }, async () => {
+  const heldDecision = { ...DECISION, anchor_base: null, recording: { requested: 'base', allowed: 'base', used: 'none', held: { network: 'base', reason: 'budget', message: 'Base recording held: today\'s budget is spent', retry_after_seconds: 3600 } } };
+  const { reached, nodeOut, gets } = await runWorkflow(JSON.parse(readFileSync(E_FILE, 'utf8')), { answer: rubric('reject'), layer: { answers: { ok: true, receipt: { verdict: 'reject', reasons: [] }, decision: heldDecision } } });
+  const out = nodeOut['Base transactions'][0].json;
+  assert.equal(gets.length, 0, 'nothing to wait for');
+  assert.equal(out.recorded_on_base, false); assert.match(out.held, /budget/); assert.match(out.retry, /\/judge\/decisions\/decision-1-abc\/base/);
+  assert.equal(reached['Not on Base yet: the output says why'], 1);
+});
+test('judge-base-job-record: a hard fail at prepare never asks TypeSafe and records nothing', { skip: !HAS_E && 'lives in @taifoon/jev' }, async () => {
+  const { reached, calls, posts } = await runWorkflow(JSON.parse(readFileSync(E_FILE, 'utf8')), { answer: rubric('reject'), layer: { prepare: { ok: true, mode: 'prepare', hard_fail: true, receipt: { verdict: 'reject' } } } });
+  assert.equal(calls.length, 0); assert.equal(posts.length, 1);
+  assert.equal(reached['Hard fail: rejected by code, nothing to record'], 1);
+});
+test('judge-base-job-record: a refusal from the layer (no key, stale digest) stops the run with its code', { skip: !HAS_E && 'lives in @taifoon/jev' }, async () => {
+  await assert.rejects(runWorkflow(JSON.parse(readFileSync(E_FILE, 'utf8')), { answer: rubric('reject'), layer: { answers: { ok: false, code: 'unauthorized', error: 'mode:answers needs a valid X-API-Key' } } }), /unauthorized/);
 });
