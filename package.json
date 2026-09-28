@@ -1,6 +1,6 @@
 {
   "name": "@taifoon/n8n-nodes-typesafe",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "description": "n8n community node for TypeSafe System One (Jev): ask Noul, Choice and Score questions about any item, branch on calibrated probabilities, and send low-confidence answers to human review.",
   "keywords": [
     "n8n-community-node-package",
