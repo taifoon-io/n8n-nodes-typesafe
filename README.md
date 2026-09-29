@@ -21,6 +21,8 @@ item ──► TypeSafe ──► Pass      confident, and it cleared your thres
 ## Install
 
 In self-hosted n8n: **Settings → Community Nodes → Install**, then enter `@taifoon/n8n-nodes-typesafe`.
+It brings Taifoon's other packages with it: `@taifoon/jev` (the grader) and `@taifoon/jev-wilson` (the premium maths).
+Because of those dependencies it is not an n8n-verified node, so it installs on self-hosted n8n, not on n8n Cloud.
 
 Get a TypeSafe API key from [console.typesafe.ai](https://console.typesafe.ai) and create a
 **TypeSafe API** credential. The test button makes one tiny real call, so you know at once whether the key works.
