@@ -9,7 +9,7 @@ export class TaifoonTypeSafeApi implements ICredentialType {
 	// credential type names are global to an n8n instance
 	name = 'taifoonTypeSafeApi';
 
-	displayName = 'TypeSafe API';
+	displayName = 'TypeSafe System One API';
 
 	icon = { light: 'file:taifoon.svg', dark: 'file:taifoon.dark.svg' } as const;
 
@@ -17,7 +17,7 @@ export class TaifoonTypeSafeApi implements ICredentialType {
 
 	properties: INodeProperties[] = [
 		{ displayName: 'API Key', name: 'apiKey', type: 'string', typeOptions: { password: true }, default: '', required: true, description: 'From console.typesafe.ai' },
-		{ displayName: 'Base URL', name: 'baseUrl', type: 'string', default: 'https://api.typesafe.ai', description: 'Change only for a private deployment. Must be https: the node refuses to send your key anywhere else.' },
+		{ displayName: 'Host', name: 'baseUrl', type: 'string', default: 'https://api.typesafe.ai', description: 'The System One host. TypeSafe (https://api.typesafe.ai) by default; change it only for another host that serves the same System One API at /v1/systemone. Must be https: the node refuses to send your key anywhere else.' },
 	];
 
 	authenticate: IAuthenticateGeneric = { type: 'generic', properties: { headers: { Authorization: '=Bearer {{$credentials.apiKey}}' } } };

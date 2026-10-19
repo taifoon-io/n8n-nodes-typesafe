@@ -102,14 +102,14 @@ async function jevOutput(o: JevOptions, receipt: ReturnType<typeof buildReceipt>
 
 export class TaifoonTypeSafe implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'Taifoon TypeSafe',
+		displayName: 'System One',
 		name: 'taifoonTypeSafe',
 		icon: { light: 'file:taifoonTypeSafe.svg', dark: 'file:taifoonTypeSafe.dark.svg' },
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["operation"]}}',
-		description: 'Ask yes/no, pick-one and rate-it questions about any item and get calibrated probabilities back',
-		defaults: { name: 'TypeSafe' },
+		description: 'Ask System One (hosted by TypeSafe) yes/no, pick-one and rate-it questions about any item and get calibrated probabilities back',
+		defaults: { name: 'System One' },
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],
 		usableAsTool: true,
@@ -249,7 +249,7 @@ export class TaifoonTypeSafe implements INodeType {
 					}
 					const base = String(cred.baseUrl || 'https://api.typesafe.ai').replace(/\/$/, '');
 					// a key is only ever sent over TLS: a typo or a pasted http:// address must not leak it
-					if (!/^https:\/\/[^\s/]+/i.test(base)) throw new NodeOperationError(this.getNode(), 'The Base URL in the TypeSafe API credential must start with https://', { itemIndex: i });
+					if (!/^https:\/\/[^\s/]+/i.test(base)) throw new NodeOperationError(this.getNode(), 'The Host in the System One API credential must start with https://', { itemIndex: i });
 					const req: IHttpRequestOptions = { method: 'POST', url: `${base}/v1/systemone`, body: { model: String(this.getNodeParameter('model', i, 'jev-1.13.0') || 'jev-1.13.0'), state, questions }, json: true, timeout: 60000 };
 					const started = Date.now();
 					const res = (await withBackoff(this.getNode(), () => this.helpers.httpRequestWithAuthentication.call(this, 'taifoonTypeSafeApi', req))) as { model?: string; answers?: Record<string, IDataObject>; usage?: IDataObject };
