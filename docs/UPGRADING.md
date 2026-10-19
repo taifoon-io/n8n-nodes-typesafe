@@ -1,5 +1,10 @@
 # Upgrading
 
+## 3.0.1
+
+The node shows as **TypeSafe** again and the credential as **TypeSafe API** (3.0.0 called them System One). For any
+System One host, use `@taifoon/n8n-nodes-system-one`. Node and credential types are unchanged.
+
 ## From 2.x to 3.0.0
 
 n8n's verified community nodes may not be flow-control nodes and may not have run-time dependencies, so 3.0.0:
@@ -14,15 +19,12 @@ n8n's verified community nodes may not be flow-control nodes and may not have ru
   internal name `routing` and its JSON are unchanged, so saved workflows keep their thresholds).
 - **Has no dependencies.** 2.0.5 installed `@taifoon/jev` and `@taifoon/jev-wilson` with it; the node never imported
   them (its grader code is vendored). Install them yourself if another node of yours uses them.
-- **Is named System One.** The node shows as **System One** and the credential as **TypeSafe System One API**;
-  TypeSafe stays the default host (`https://api.typesafe.ai`). The node type `taifoonTypeSafe` and the credential type
-  `taifoonTypeSafeApi` are unchanged, so saved workflows and credentials keep working.
 - **Drops the approval-gate and MCP examples.** They described a hosted relay, which is a second service.
 - With **Continue On Fail**, an error item now leaves by the one output with `outcome: "review"`.
 
 ## From 1.1 or earlier
 
 The credential type was renamed (from `typeSafeApi` to `taifoonTypeSafeApi`) so it cannot collide with other
-TypeSafe packages or a future built-in node. After updating, create the **TypeSafe System One API** credential again and
+TypeSafe packages or a future built-in node. After updating, create the **TypeSafe API** credential again and
 select it in your TypeSafe nodes. Nothing else changed. If you pre-fill credentials from a file, use the new
 name as the key ([Supplying keys securely](SECURE_KEYS.md)).

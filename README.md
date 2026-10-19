@@ -1,9 +1,9 @@
-# System One for n8n (hosted by TypeSafe)
+# TypeSafe for n8n
 
 **Ask a model that only judges: yes/no, pick-one and rate-it questions, each answered with a probability.**
 
-- **What:** an n8n node that asks System One, the judging model hosted by TypeSafe (model Jev), yes/no (Noul),
-  pick-one (Choice) and rate-it (Score) questions about any item, and returns every answer with its probabilities on one output.
+- **What:** an n8n node that asks TypeSafe's Jev yes/no (Noul), pick-one (Choice) and rate-it (Score) questions about
+  any item, and returns every answer with its probabilities on one output.
 - **Why:** a chat model writes prose you have to parse and guesses when unsure. This node returns a number for
   every answer, so your workflow can tell a confident answer from a guess.
 - **How:** in n8n, **Settings → Community Nodes → Install** `@taifoon/n8n-nodes-typesafe`, add your TypeSafe key, and ask
@@ -24,7 +24,7 @@ In n8n: **Settings → Community Nodes → Install**, then enter `@taifoon/n8n-n
 The package has no run-time dependencies; everything it needs ships inside the node.
 
 Get a TypeSafe API key from [console.typesafe.ai](https://console.typesafe.ai) and create a
-**TypeSafe System One API** credential. The test button makes one tiny real call, so you know at once whether the key works.
+**TypeSafe API** credential. The test button makes one tiny real call, so you know at once whether the key works.
 The node talks to TypeSafe directly with your key, and nobody else, including us, is in the path.
 
 Running n8n for a team? [Supply the key from a secrets file](docs/SECURE_KEYS.md). Upgrading from 1.1 or
@@ -44,13 +44,14 @@ earlier, or from 2.x (three outputs became one in 3.0.0)? See [Upgrading](docs/U
    `outcome: "pass"`; the ones it is unsure about get `outcome: "review"`. Add a **Switch** node on
    `{{ $json.outcome }}` to send each kind where you want it.
 
-Ready-made versions are in [`examples/`](examples).
+Ready-made versions are in [`examples/`](examples). For the same questions on any System One host (TypeSafe, Venice
+or another), use [`@taifoon/n8n-nodes-system-one`](https://www.npmjs.com/package/@taifoon/n8n-nodes-system-one).
 
 ## Judge workflows, ready to import
 
 Each one runs as imported on sample data, needs only your own TypeSafe key, and ends in a Switch on `outcome` with three
 plainly named exits. Import
-the file in n8n (**Workflows → Import from File**), pick your **TypeSafe System One API** credential, press **Test workflow**.
+the file in n8n (**Workflows → Import from File**), pick your **TypeSafe API** credential, press **Test workflow**.
 
 | # | Workflow | For | The judge decides | File |
 |---|---|---|---|---|
