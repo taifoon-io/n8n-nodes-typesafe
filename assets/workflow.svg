@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="400" viewBox="0 0 1280 400" role="img" aria-label="grade a delivery: the label decides the branch, the probabilities explain it">
+<title>grade a delivery: the label decides the branch, the probabilities explain it</title>
+<defs>
+  <pattern id="g" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" fill="none" stroke="rgba(230,240,247,0.05)" stroke-width="1"/></pattern>
+  <radialGradient id="glow" cx="78%" cy="40%" r="55%"><stop offset="0" stop-color="#3DA5FF" stop-opacity="0.18"/><stop offset="1" stop-color="#3DA5FF" stop-opacity="0"/></radialGradient>
+  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="rgba(230,240,247,0.55)"/></marker>
+</defs>
+<rect width="1280" height="400" fill="#000000"/><rect width="1280" height="400" fill="url(#g)"/><rect width="1280" height="400" fill="url(#glow)"/>
+<path d="M159 152 C241 152 241 152 323 152" fill="none" stroke="rgba(230,240,247,0.55)" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path d="M419 152 C506 152 506 152 593 152" fill="none" stroke="rgba(230,240,247,0.55)" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path d="M689 131 C791 131 791 62 893 62" fill="none" stroke="rgba(230,240,247,0.55)" stroke-width="1.5" marker-end="url(#arrow)"/><text x="791" y="88.5" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="#00B5B8">pass</text>
+<path d="M689 152 C791 152 791 177 893 177" fill="none" stroke="rgba(230,240,247,0.55)" stroke-width="1.5" marker-end="url(#arrow)"/><text x="791" y="156.5" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="#00B5B8">fail</text>
+<path d="M689 173 C791 173 791 292 893 292" fill="none" stroke="rgba(230,240,247,0.55)" stroke-width="1.5" marker-end="url(#arrow)"/><text x="791" y="224.5" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="#00B5B8">review</text>
+<g><rect x="70" y="110" width="84" height="84" fill="#030305" stroke="rgba(230,240,247,0.10)" stroke-width="1"/>
+<text x="112" y="163" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="30" fill="#E6F0F7">▤</text>
+
+<rect x="149" y="147" width="10" height="10" fill="rgba(230,240,247,0.55)"/>
+<text x="112" y="218" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="15" fill="#E6F0F7">Deliverable</text><text x="112" y="236" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="rgba(230,240,247,0.55)">Form · Webhook</text></g>
+<g><rect x="330" y="110" width="84" height="84" fill="rgba(61,165,255,0.08)" stroke="#3DA5FF" stroke-width="2"/>
+<text x="372" y="163" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="30" fill="#3DA5FF">TS</text>
+<rect x="325" y="147" width="10" height="10" fill="#000000" stroke="rgba(230,240,247,0.55)"/>
+<rect x="409" y="147" width="10" height="10" fill="rgba(230,240,247,0.55)"/>
+<text x="372" y="218" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="15" fill="#E6F0F7">TypeSafe</text><text x="372" y="236" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="#3DA5FF">RUBRIC_v1 · outcome</text></g>
+<g><rect x="600" y="110" width="84" height="84" fill="#030305" stroke="rgba(230,240,247,0.10)" stroke-width="1"/>
+<text x="642" y="163" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="30" fill="#E6F0F7">⇉</text>
+<rect x="595" y="147" width="10" height="10" fill="#000000" stroke="rgba(230,240,247,0.55)"/>
+<rect x="679" y="126" width="10" height="10" fill="rgba(230,240,247,0.55)"/><rect x="679" y="147" width="10" height="10" fill="rgba(230,240,247,0.55)"/><rect x="679" y="168" width="10" height="10" fill="rgba(230,240,247,0.55)"/>
+<text x="642" y="218" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="15" fill="#E6F0F7">Switch</text><text x="642" y="236" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="rgba(230,240,247,0.55)">$json.outcome</text></g>
+<g><rect x="900" y="20" width="84" height="84" fill="#030305" stroke="rgba(230,240,247,0.10)" stroke-width="1"/>
+<text x="942" y="73" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="30" fill="#E6F0F7">✓</text>
+<rect x="895" y="57" width="10" height="10" fill="#000000" stroke="rgba(230,240,247,0.55)"/>
+
+<text x="942" y="128" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="15" fill="#E6F0F7">Accept and pay</text></g>
+<g><rect x="900" y="135" width="84" height="84" fill="#030305" stroke="rgba(230,240,247,0.10)" stroke-width="1"/>
+<text x="942" y="188" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="30" fill="#E6F0F7">×</text>
+<rect x="895" y="172" width="10" height="10" fill="#000000" stroke="rgba(230,240,247,0.55)"/>
+
+<text x="942" y="243" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="15" fill="#E6F0F7">Send it back</text></g>
+<g><rect x="900" y="250" width="84" height="84" fill="#030305" stroke="rgba(230,240,247,0.10)" stroke-width="1"/>
+<text x="942" y="303" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="30" fill="#E6F0F7">?</text>
+<rect x="895" y="287" width="10" height="10" fill="#000000" stroke="rgba(230,240,247,0.55)"/>
+
+<text x="942" y="358" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="15" fill="#E6F0F7">A person decides</text></g>
+<text x="32" y="378" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" letter-spacing="1.5" fill="rgba(230,240,247,0.55)">GRADE A DELIVERY: THE LABEL DECIDES THE BRANCH, THE PROBABILITIES EXPLAIN IT</text>
+</svg>

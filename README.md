@@ -1,4 +1,12 @@
-# TypeSafe for n8n
+<p align="center">
+  <img src="https://raw.githubusercontent.com/taifoon-io/n8n-nodes-typesafe/main/assets/banner.svg" alt="TypeSafe for n8n" width="100%">
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@taifoon/n8n-nodes-typesafe"><img src="https://img.shields.io/npm/v/@taifoon/n8n-nodes-typesafe?style=flat-square&labelColor=000000&color=3DA5FF&label=npm" alt="npm"></a>
+  <img src="https://img.shields.io/badge/provenance-signed-00B5B8?style=flat-square&labelColor=000000" alt="provenance">
+  <img src="https://img.shields.io/badge/dependencies-0-E6F0F7?style=flat-square&labelColor=000000" alt="no dependencies">
+</p>
 
 **Ask a model that only judges: yes/no, pick-one and rate-it questions, each answered with a probability.**
 
@@ -17,6 +25,9 @@ item ──► TypeSafe ──► the item + answers (p, probabilities, confiden
                                                           │
                           branch on it with n8n's own Switch or IF node, if you want to
 ```
+
+<p align="center"><img src="https://raw.githubusercontent.com/taifoon-io/n8n-nodes-typesafe/main/assets/demo.gif" alt="The refund-dispute judge in n8n: TypeSafe labels the dispute pass and the Switch sends it to Refund" width="100%"></p>
+<p align="center"><sub>The refund-dispute judge in n8n 2.43, with the sample answers pinned so it runs without a key.</sub></p>
 
 ## Install
 
@@ -46,6 +57,10 @@ earlier, or from 2.x (three outputs became one in 3.0.0)? See [Upgrading](docs/U
 
 Ready-made versions are in [`examples/`](examples). For the same questions on any System One host (TypeSafe, Venice
 or another), use [`@taifoon/n8n-nodes-system-one`](https://www.npmjs.com/package/@taifoon/n8n-nodes-system-one).
+
+<p align="center"><img src="https://raw.githubusercontent.com/taifoon-io/n8n-nodes-typesafe/main/assets/workflow.svg" alt="Deliverable → TypeSafe → Switch on outcome → accept, send back or a person decides" width="100%"></p>
+
+<p align="center"><img src="https://raw.githubusercontent.com/taifoon-io/n8n-nodes-typesafe/main/assets/answers.svg" alt="RUBRIC_v1 answers for one delivery" width="100%"></p>
 
 ## Judge workflows, ready to import
 
@@ -125,3 +140,7 @@ Independent project. Jev and TypeSafe are products of TypeSafe AI, Inc., which d
 
 MIT. An independent community node by [Taifoon](https://github.com/taifoon-io). TypeSafe and Jev are
 trademarks of TypeSafe AI; this project is not affiliated with or endorsed by TypeSafe AI.
+
+---
+
+<p align="center"><a href="https://taifoon.io"><img src="https://raw.githubusercontent.com/taifoon-io/n8n-nodes-typesafe/main/assets/taifoon.svg" alt="Taifoon" height="22"></a></p>

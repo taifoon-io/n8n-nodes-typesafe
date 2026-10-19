@@ -169,7 +169,7 @@
     },
     {
       "parameters": {
-        "content": "## Decide the easy disputes, route the rest\n\nTwo closed questions, each with a probability. Only a clear case leaves by **Refund** or **Deny**. Anything in between goes to **a person**, so no one is refused on a guess.\n\nTune the thresholds in **Routing**. Your own TypeSafe key only.",
+        "content": "## Decide the easy disputes, route the rest\n\nTwo closed questions, each with a probability. Only a clear case leaves by **Refund** or **Deny**. Anything in between goes to **a person**, so no one is refused on a guess.\n\nTune the thresholds in **Thresholds**. Your own TypeSafe key only.",
         "width": 480,
         "height": 240
       },

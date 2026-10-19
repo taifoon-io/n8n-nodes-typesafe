@@ -169,7 +169,7 @@ return [{ pairedItem: { item: 0 }, json: {
     { id: 'evidence_contradicts', kind: 'noul', text: 'Does the seller\'s evidence directly contradict the buyer\'s claim?' },
   ]), routing: JSON.stringify({ defect_plausible: { gte: 0.7 }, evidence_contradicts: { lte: 0.3 } }) }, at(480, 420)),
   ...exits('Refund', 'Deny, with the reason', 'A person decides', 420).map((n, i) => ({ ...n, position: at(760, 240 + i * 180) })),
-  note('How it works', '## Decide the easy disputes, route the rest\n\nTwo closed questions, each with a probability. Only a clear case leaves by **Refund** or **Deny**. Anything in between goes to **a person**, so no one is refused on a guess.\n\nTune the thresholds in **Routing**. Your own TypeSafe key only.', at(160, 40), 480, 240),
+  note('How it works', '## Decide the easy disputes, route the rest\n\nTwo closed questions, each with a probability. Only a clear case leaves by **Refund** or **Deny**. Anything in between goes to **a person**, so no one is refused on a guess.\n\nTune the thresholds in **Thresholds**. Your own TypeSafe key only.', at(160, 40), 480, 240),
 ], [link('Start', 'The dispute'), link('The dispute', 'TypeSafe'), link('TypeSafe', 'Refund', 0), link('TypeSafe', 'Deny, with the reason', 1), link('TypeSafe', 'A person decides', 2)], [{ name: 'E-commerce' }, { name: 'Judge' }]);
 
 T['judge-extraction-qa'] = workflow('QA an extraction against its source document (Jev judge)', [

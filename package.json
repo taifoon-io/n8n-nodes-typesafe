@@ -1,6 +1,6 @@
 {
   "name": "@taifoon/n8n-nodes-typesafe",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "n8n community node for TypeSafe's Jev: ask yes/no, pick-one and score questions about any item and get calibrated probabilities back, with an optional pass / fail / review label.",
   "keywords": [
     "n8n-community-node-package",
