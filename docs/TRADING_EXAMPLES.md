@@ -5,7 +5,7 @@ live 5-minute candles, the real model, run on 2026-09-21. A program computed the
 (averages, ranges, volatility ratios, whether the New York morning session is open); each task is
 written the way a person would type it, one per language; the gates are plain thresholds in code.
 
-**A pre-trade entry gate, in English** (NQ, 798 ms, left by **Fail**)
+**A pre-trade entry gate, in English** (NQ, 798 ms, outcome **fail**)
 
 > Check if price is above its 20-bar average. Check if the last hour's move is larger than usual for this market. Classify the market into trending up, trending down or ranging. Rate how stretched price is from its average from 1 to 5.
 
@@ -27,7 +27,7 @@ At least one check did not pass.
 The second check failed on purpose: the gate wants a calm last hour (`lte 0.5`) and the hour was not calm.
 That is a gate doing its job, not the model being wrong.
 
-**A pre-trade order sanity check, in Japanese** (BTC, 301 ms, left by **Review**)
+**A pre-trade order sanity check, in Japanese** (BTC, 301 ms, outcome **review**)
 
 > この注文の数量は通常より異常に大きいですか。指値は現在の価格から大きく離れていますか。この注文を次のいずれかに分類してください：通常、要確認、誤発注の疑い。
 
@@ -47,7 +47,7 @@ That is a gate doing its job, not the model being wrong.
 Both yes/no checks passed, but the model would not commit to a category, so the order goes to a person.
 That is what Review is for. (The order is a sample ticket measured against the real last price.)
 
-**An exit guard, in German** (BTC, 663 ms, left by **Review**)
+**An exit guard, in German** (BTC, 663 ms, outcome **review**)
 
 > Prüfe, ob der Kurs unter dem 20-Perioden-Durchschnitt liegt. Prüfe, ob die Volatilität ungewöhnlich hoch ist. Bewerte die Dringlichkeit, eine Long-Position zu verkleinern, von 1 bis 5.
 

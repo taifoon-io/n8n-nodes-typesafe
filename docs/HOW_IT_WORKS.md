@@ -5,8 +5,8 @@ gets this ticket, how urgent is it, is this invoice a duplicate. Today you eithe
 for that, or you ask a chat model and then fight with its prose: parse the answer, handle the day it
 says "It depends", pay for a paragraph you throw away.
 
-This node does the deciding and nothing else. You hand it an item and a few questions. It hands back
-answers your workflow can branch on directly, with a probability attached, usually in well under a
+This node does the judging and nothing else. You hand it an item and a few questions. It hands back
+answers with a probability attached, which your workflow can branch on with its own IF or Switch node, usually in well under a
 second and for about two thousandths of a cent.
 
 It works by calling [TypeSafe's Jev](https://docs.typesafe.ai/introduction), a System One model built to make
@@ -21,9 +21,9 @@ and Score (rate it).
    ─────────────            ──────────────────────          ─────────
    gathers the item    ──►  turns your words into      ──►  answers each question
    runs the branches        typed questions                 with a probability
-        ▲                   turns the answers back    ◄──
-        └────────────────   into Pass / Fail / Review,
-                            and into sentences in the
+        ▲                   labels the answers        ◄──
+        └────────────────   pass / fail / review,
+                            and says them back in the
                             asker's own language
 ```
 
@@ -33,14 +33,14 @@ and Score (rate it).
   a number you can threshold, quickly and cheaply, instead of prose you have to interpret.
 - **Taifoon's part is the layer between them**, and it is plain code that ships inside this node. Going
   in, it compiles what you mean ("is this a refund?") into the three question types the model
-  understands. Coming out, it compiles the model's probabilities into the only three things a workflow
-  can act on: go ahead, do not, or ask a human. Every threshold in that step is yours and sits on the
-  canvas where you can see it. And when a person is waiting on the other end, it says the answers back
+  understands. Coming out, it labels the model's probabilities with an `outcome`: pass, fail or review.
+  Every threshold in that step is yours and sits on the canvas where you can see it, and your workflow
+  decides what each label leads to. And when a person is waiting on the other end, it says the answers back
   as sentences in the language they wrote in.
 
-Why three outputs and not two: a yes/no forces a confident answer even when the model is guessing, and
-that is how automations go wrong silently. **Review** is the honest third option. It is where the
-low-confidence cases and the malformed answers go, so a person sees exactly the items that need one.
+Why three labels and not two: a yes/no forces a confident answer even when the model is guessing, and
+that is how automations go wrong silently. `review` is the honest third label. The low-confidence cases
+and the malformed answers get it, so your workflow can treat exactly those items differently.
 
 ## Who this is for
 
@@ -50,7 +50,7 @@ low-confidence cases and the malformed answers go, so a person sees exactly the 
 - **Builders of data pipelines** who need to classify, de-duplicate or score thousands of rows and
   cannot afford, or wait for, a chat model on each one.
 - **People who do not trust a yes/no without a number.** Every answer comes with how sure the model
-  is, so the uncertain cases go to a human instead of going wrong quietly.
+  is, so the uncertain cases can be told apart instead of going wrong quietly.
 
 It is not for writing text, summarising, or reasoning about code. We measured that honestly; see
 [What it is good and bad at](RELIABILITY.md#what-it-is-good-and-bad-at).

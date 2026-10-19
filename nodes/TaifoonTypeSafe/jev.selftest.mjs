@@ -24,29 +24,32 @@ function ctx(params, calls) {
 const base = { operation: 'ask', connection: 'direct', model: 'jev-1.13.0', state: '{"task":"return 4","delivered":"4"}', questions: {}, questionsJson: '[]', routing: '{}', replyLanguage: 'off', failClosed: true, rawOutput: false };
 const node = new TaifoonTypeSafe();
 
-// 1. no Jev options: exactly as before (no jev key, pass)
+// 1. no Jev options: exactly as before (no jev key, outcome pass, one output)
 { const calls = []; const [pass] = await node.execute.call(ctx({ ...base, questionsJson: JSON.stringify([ANSWERS[0]].map((a) => ({ id: a.id, kind: 'choice', text: 'Done?', options: 'yes, no' }))), jev: {} }, calls));
-	assert.equal(pass.length, 1); assert.equal(pass[0].json.jev, undefined); assert.equal(calls[0].body.state.task, 'return 4'); }
+	assert.equal(pass.length, 1); assert.equal(pass[0].json.jev, undefined); assert.equal(pass[0].json.outcome, 'pass'); assert.equal(calls[0].body.state.task, 'return 4'); }
 
-// 2. RUBRIC_v1 + record (devnet) + evaluator: asks the four, composes complete → Pass, unsigned calls out
-{ const calls = []; const [pass, fail, review] = await node.execute.call(ctx({ ...base, jev: { rubric: true, subject: 'job-7', chainId: 8453, record: 'devnet', evaluator: 'virtuals-erc8183', jobId: '7' } }, calls));
-	assert.deepEqual([pass.length, fail.length, review.length], [1, 0, 0]);
+// 2. RUBRIC_v1 + record (devnet) + evaluator: asks the four, composes complete → outcome pass, unsigned calls out
+{ const calls = []; const outs = await node.execute.call(ctx({ ...base, jev: { rubric: true, subject: 'job-7', chainId: 8453, record: 'devnet', evaluator: 'virtuals-erc8183', jobId: '7' } }, calls));
+	assert.equal(outs.length, 1); const [pass] = outs; assert.equal(pass.length, 1); assert.equal(pass[0].json.outcome, 'pass');
 	assert.deepEqual(Object.keys(calls[0].body.questions), ['spec_met', 'unsupported_claim', 'ending', 'cheat_shaped']);
 	assert.equal(calls[0].body.model, 'jev-1.13.0');   // pinned, never the moving jev-latest alias by default
 	assert.match(calls[0].body.state, /facts code established before the judge was asked/);
 	const j = pass[0].json.jev;
 	assert.equal(j.verdict, 'complete'); assert.equal(j.receipt.model, 'jev-1.13.0'); assert.equal(j.receipt.inputDigest.length, 66);
-	assert.deepEqual(j.record.calls.map((c) => c.fn), ['JevAnswerLog.record', 'JevDecisionLog.record']);
+	// @taifoon/jev 0.3.0 stamps by default: the answers, the decision that cites them, then the grade stamp
+	assert.deepEqual(j.record.calls.map((c) => c.fn), ['JevAnswerLog.record', 'JevDecisionLog.record', 'GradeStampRegistry.stamp']);
 	assert.equal(j.evaluator.fn, 'complete(uint256,bytes32,bytes)'); assert.ok(j.evaluator.data.includes(j.decisionDigest.slice(2))); }
 
-// 3. a false fact: reject on Fail, Jev never asked, no record, a reject call
-{ const calls = []; const [, fail] = await node.execute.call(ctx({ ...base, jev: { rubric: true, subject: 'job-8', factsJson: '{"delivered": true, "checks": {"proof_verifies": false}}', evaluator: 'bitagent-erc8183', jobId: '8' } }, calls));
-	assert.equal(calls.length, 0); assert.equal(fail.length, 1);
+// 3. a false fact: outcome fail, Jev never asked, no record, a reject call
+{ const calls = []; const [fail] = await node.execute.call(ctx({ ...base, jev: { rubric: true, subject: 'job-8', factsJson: '{"delivered": true, "checks": {"proof_verifies": false}}', evaluator: 'bitagent-erc8183', jobId: '8' } }, calls));
+	assert.equal(calls.length, 0); assert.equal(fail.length, 1); assert.equal(fail[0].json.outcome, 'fail');
 	assert.equal(fail[0].json.jev.verdict, 'reject'); assert.equal(fail[0].json.jev.decisionDigest, null); assert.equal(fail[0].json.jev.evaluator.fn, 'reject(uint256,bytes32,bytes)'); }
 
-// 4. record on both networks: four calls, the Base pair carries to = null while this version has no Base address
+// 4. record on both networks: devnet records and stamps; Base records both logs and has no stamp registry yet
 { const calls = []; const [pass] = await node.execute.call(ctx({ ...base, jev: { rubric: true, subject: 'job-9', record: 'both' } }, calls));
-	assert.deepEqual(pass[0].json.jev.record.calls.map((c) => c.chainId), [36927, 36927, 8453, 8453]); }
+	const rec = pass[0].json.jev.record.calls;
+	assert.deepEqual(rec.map((c) => [c.chainId, c.fn]), [[36927, 'JevAnswerLog.record'], [36927, 'JevDecisionLog.record'], [36927, 'GradeStampRegistry.stamp'], [8453, 'JevAnswerLog.record'], [8453, 'JevDecisionLog.record']]);
+	assert.ok(rec.every((c) => /^0x[0-9a-fA-F]{40}$/.test(c.to)), 'every call has a contract'); }
 
 // 5. the options exist in the node's description (a UI the canvas can show), each off by default
 { const jevProp = node.description.properties.find((p) => p.name === 'jev');

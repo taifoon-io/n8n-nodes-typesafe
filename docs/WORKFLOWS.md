@@ -26,10 +26,9 @@ The importable example is `examples/typed-gate.workflow.json`.
 - **Batching.** One item is one request. For many items, keep n8n's batching on and the deck's daily
   ceiling in mind; TypeSafe allows 1,200 requests a minute.
 
-## Approval gate before an agent's tool call
+## Branching on the answer
 
-An agent proposes a tool call; a model that only judges says whether it may run. Two ready-made versions,
-both from a real run: [`approval-gate-node.workflow.json`](../examples/approval-gate-node.workflow.json)
-uses this node (Pass = run it, Fail = block it, Review = ask a person), and
-[`approval-gate-mcp.workflow.json`](../examples/approval-gate-mcp.workflow.json) uses n8n's MCP Client
-against the hosted server. Details and the measured answers: [TypeSafe over MCP](MCP.md).
+The node has one output. Each item carries `answers` (with `p`, `probabilities`, `confidence`) and, when you set
+Thresholds or Jev Options, an `outcome` of `pass`, `fail` or `review`. Put n8n's **Switch** node after it, with one
+rule per value of `{{ $json.outcome }}`, or an **IF** node on a single probability such as
+`{{ $json.answers.is_refund.p }} >= 0.8`. Every template in [`examples/`](../examples) ends this way.

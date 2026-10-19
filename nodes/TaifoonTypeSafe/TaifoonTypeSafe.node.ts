@@ -14,7 +14,10 @@ import { evaluatorCall, type Protocol } from './jev/evaluator/index';
  * No other account, nothing in the path.
  *
  * The translation layer is code that ships inside this node, so it costs nothing: Translate compiles a plain-language task into typed questions,
- * and Routing turns answers into the Pass / Fail / Review outputs. No dependency, no model call.
+ * and Thresholds label each item pass / fail / review. No dependency, no model call.
+ *
+ * One output (3.0.0): the node returns answers, probabilities and an `outcome` label, and never routes.
+ * Branch on `outcome` with n8n's own IF or Switch node.
  */
 
 interface UiQuestion { id: string; kind: 'noul' | 'choice' | 'score'; text: string; options?: string | string[] | Record<string, string | null>; levels?: string | string[]; yesMeans?: string; noMeans?: string; /** set by Translate: the clause as the person wrote it, echoed by the reply */ source?: string }
@@ -79,7 +82,7 @@ async function withBackoff<T>(node: INode, call: () => Promise<T>): Promise<T> {
 
 /** Jev options (1.5.0): all off by default, so an Ask without them behaves exactly as before. */
 interface JevOptions { rubric?: boolean; subject?: string; chainId?: number; factsJson?: string | IDataObject; record?: Network; evaluator?: Protocol | 'none'; jobId?: string; evaluatorAddress?: string }
-const BRANCH_OF: Record<Verdict, 'pass' | 'fail' | 'review'> = { complete: 'pass', reject: 'fail', needs_review: 'review' };
+const OUTCOME_OF: Record<Verdict, 'pass' | 'fail' | 'review'> = { complete: 'pass', reject: 'fail', needs_review: 'review' };
 const VERDICT_OF: Record<string, Verdict> = { pass: 'complete', fail: 'reject', review: 'needs_review' };
 function jevFacts(raw: JevOptions['factsJson']): Facts {
 	const f = (typeof raw === 'string' ? JSON.parse(raw || '{}') : raw ?? {}) as { delivered?: boolean; checks?: Record<string, boolean | null>; priceUsdc?: number | null };
@@ -105,11 +108,10 @@ export class TaifoonTypeSafe implements INodeType {
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["operation"]}}',
-		description: 'Ask yes/no, pick-one and rate-it questions about any item and route on calibrated answers',
+		description: 'Ask yes/no, pick-one and rate-it questions about any item and get calibrated probabilities back',
 		defaults: { name: 'TypeSafe' },
 		inputs: [NodeConnectionTypes.Main],
-		outputs: [NodeConnectionTypes.Main, NodeConnectionTypes.Main, NodeConnectionTypes.Main],
-		outputNames: ['Pass', 'Fail', 'Review'],
+		outputs: [NodeConnectionTypes.Main],
 		usableAsTool: true,
 		credentials: [
 			{ name: 'taifoonTypeSafeApi', required: true, displayOptions: { show: { operation: ['ask'], connection: ['direct'] } } },
@@ -117,7 +119,7 @@ export class TaifoonTypeSafe implements INodeType {
 		properties: [
 			{ displayName: 'Operation', name: 'operation', type: 'options', noDataExpression: true, default: 'ask',
 				options: [
-					{ name: 'Ask', value: 'ask', action: 'Ask typed questions about an item', description: 'Send an item and a battery of typed questions; route on the answers' },
+					{ name: 'Ask', value: 'ask', action: 'Ask typed questions about an item', description: 'Send an item and a battery of typed questions; get each answer with its probabilities' },
 					{ name: 'Translate', value: 'translate', action: 'Translate a task into typed questions', description: 'Compile a plain-language task into questions. Runs inside the node: free, offline, deterministic.' },
 				] },
 			{ displayName: 'Connection', name: 'connection', type: 'options', default: 'direct', displayOptions: { show: { operation: ['ask'] } },
@@ -142,8 +144,8 @@ export class TaifoonTypeSafe implements INodeType {
 				] }] },
 			{ displayName: 'Questions From Translate (JSON)', name: 'questionsJson', type: 'json', default: '[]', displayOptions: { show: { operation: ['ask'] } },
 				description: 'Optional. The "questions" array produced by the Translate operation, for example {{ $JSON.ask.questions }}. Added to the questions above.' },
-			{ displayName: 'Routing (JSON)', name: 'routing', type: 'json', default: '{}', displayOptions: { show: { operation: ['ask'] } },
-				description: 'Thresholds per question ID, for example {"is_refund": {"gte": 0.7}, "team": {"minConfidence": 0.6}}. Items leave by Pass, Fail or Review. Empty: everything leaves by Pass.' },
+			{ displayName: 'Thresholds (JSON)', name: 'routing', type: 'json', default: '{}', displayOptions: { show: { operation: ['ask'] } },
+				description: 'Optional thresholds per question ID, for example {"is_refund": {"gte": 0.7}, "team": {"minConfidence": 0.6}}. Each item gets an "outcome" field (pass, fail or review) that an IF or Switch node can branch on. Empty: every outcome is pass.' },
 			{ displayName: 'Task', name: 'task', type: 'string', typeOptions: { rows: 4 }, default: '', placeholder: 'Check if the customer wants a refund. Classify the ticket into billing, technical, sales or abuse. Rate the urgency from 1 to 5.', displayOptions: { show: { operation: ['translate'] } },
 				description: 'What to decide, in plain language. One sentence or list item per decision.' },
 			{ displayName: 'Language', name: 'language', type: 'options', default: 'auto', displayOptions: { show: { operation: ['translate'] } },
@@ -161,7 +163,7 @@ export class TaifoonTypeSafe implements INodeType {
 			{ displayName: 'Jev Options', name: 'jev', type: 'collection', placeholder: 'Add Jev Option', default: {}, displayOptions: { show: { operation: ['ask'] } },
 				description: 'Grade with Jev and put the result on chain: a receipt, the unsigned record calls, the unsigned evaluator call. Nothing is signed or sent by this node. Off by default.',
 				options: [
-					{ displayName: 'Ask RUBRIC_v1', name: 'rubric', type: 'boolean', default: false, description: 'Whether to ask the four RUBRIC_v1 questions (spec_met, unsupported_claim, ending, cheat_shaped) about the item and compose complete / reject / needs_review under THRESHOLDS_v1. A failed fact rejects without asking Jev. Pass = complete, Fail = reject, Review = needs_review.' },
+					{ displayName: 'Ask RUBRIC_v1', name: 'rubric', type: 'boolean', default: false, description: 'Whether to ask the four RUBRIC_v1 questions (spec_met, unsupported_claim, ending, cheat_shaped) about the item and compose complete / reject / needs_review under THRESHOLDS_v1. A failed fact rejects without asking Jev. The outcome field is pass for complete, fail for reject and review for needs_review.' },
 					{ displayName: 'Evaluator Address', name: 'evaluatorAddress', type: 'string', default: '', description: 'The contract the evaluator call goes to, when it is not the protocol default (required for an assurance hook)' },
 					{ displayName: 'Evaluator Call', name: 'evaluator', type: 'options', default: 'none', description: 'Adds the unsigned call that ends the job on this protocol, as its evaluator (null for needs_review)',
 						options: [
@@ -175,15 +177,13 @@ export class TaifoonTypeSafe implements INodeType {
 					{ displayName: 'Subject Chain ID', name: 'chainId', type: 'number', default: 0, description: 'The chain the subject lives on (0 = off chain)' },
 				] },
 			{ displayName: 'Raw Output', name: 'rawOutput', type: 'boolean', default: false, displayOptions: { show: { operation: ['ask'] } },
-				description: 'Whether to return Jev\'s answer exactly as TypeSafe sends it, with none of this node\'s interpretation. Skips Translate/Routing/Reply and the per-question shaping: the output is the raw {answers, model, usage} the API returned. Use this to get the model\'s own numbers and probabilities untouched and do your own downstream logic. Routing outputs (fail/review) are not produced in raw mode — everything flows on the first output.' },
+				description: 'Whether to return Jev\'s answer exactly as TypeSafe sends it, with none of this node\'s interpretation. Skips Thresholds, Reply and the per-question shaping: the output is the raw {answers, model, usage} the API returned, with no outcome field. Use this to get the model\'s own numbers and probabilities untouched and do your own downstream logic.' },
 		],
 	};
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const items = this.getInputData();
-		const pass: INodeExecutionData[] = [];
-		const fail: INodeExecutionData[] = [];
-		const review: INodeExecutionData[] = [];
+		const out: INodeExecutionData[] = [];
 
 		for (let i = 0; i < items.length; i++) {
 			try {
@@ -193,7 +193,7 @@ export class TaifoonTypeSafe implements INodeType {
 					const pinned = this.getNodeParameter('language', i, 'auto') as string;
 					const { questions, dropped, notes, langs } = translateTask(String(this.getNodeParameter('task', i) ?? ''), 8, pinned === 'auto' ? undefined : (pinned as Lang));
 					const runnable = questions.filter((q) => !q.needs_input);
-					pass.push({ pairedItem: { item: i }, json: {
+					out.push({ pairedItem: { item: i }, json: {
 						ready: questions.length > 0 && runnable.length === questions.length, deterministic: true, languages: langs, questions, dropped, notes,
 						warnings: questions.filter((q) => q.warning).map((q) => ({ id: q.id, warning: q.warning })),
 						ask: { questions: runnable.map((q) => ({ id: q.id, kind: q.kind, text: q.text, source: q.source, ...(q.options ? { options: q.options.join(', ') } : {}), ...(q.levels ? { levels: q.levels.join(' | ') } : {}) })),
@@ -201,7 +201,7 @@ export class TaifoonTypeSafe implements INodeType {
 							// thresholds made a calm refund ticket "fail" for not being urgent. Route only what you mean to gate on.
 							routing: {} },
 						suggestedRouting: Object.fromEntries(runnable.map((q) => [q.id, q.routing])),
-						routingNote: 'Copy only the entries you want to gate on into Routing. A score is a ZERO-BASED level index (0 = your first level); see each answer\'s legend.' } as unknown as IDataObject });
+						routingNote: 'Copy only the entries you want to gate on into Thresholds. A score is a ZERO-BASED level index (0 = your first level); see each answer\'s legend.' } as unknown as IDataObject });
 					continue;
 				}
 
@@ -226,7 +226,7 @@ export class TaifoonTypeSafe implements INodeType {
 				const input = rubricOn ? inputFor(packOf(state as string | object), facts!) : null;
 				if (rubricOn && RUBRIC_v1.compose(facts!, null).forced === 'hard_fail') {
 					const receipt = buildReceipt({ rubric: RUBRIC_v1, subject, state: input!.state, jevState: input!.jevState, facts: facts!, answers: null, model: null, connection: 'none', caller: 'n8n' });
-					fail.push({ pairedItem: { item: i }, json: { branch: 'fail', jev: await jevOutput(jev, receipt) } });
+					out.push({ pairedItem: { item: i }, json: { outcome: 'fail', jev: await jevOutput(jev, receipt) } });
 					continue;
 				}
 				if (input) state = input.jevState;
@@ -280,7 +280,7 @@ export class TaifoonTypeSafe implements INodeType {
 				// skipped in raw mode. This is the "--raw" form: the model's own numbers
 				// and probabilities, untouched, for callers doing their own downstream logic.
 				if (this.getNodeParameter('rawOutput', i, false)) {
-					pass.push({ pairedItem: { item: i }, json: { ...meta, schema_ok: schemaOk, raw: rawRes } });
+					out.push({ pairedItem: { item: i }, json: { ...meta, schema_ok: schemaOk, raw: rawRes } });
 					continue;
 				}
 				// the backward translation runs HERE, identically on both connections
@@ -301,14 +301,13 @@ export class TaifoonTypeSafe implements INodeType {
 				const replyIn = this.getNodeParameter('replyLanguage', i, 'off') as string;
 				const said = replyIn === 'off' ? null : reply(answers, { lang: replyIn === 'auto' ? undefined : (replyIn as Lang), questions: qs.map((q) => ({ id: q.id, text: q.text, source: q.source, levels: q.levels })),
 					decisions: routed?.decisions, branch: routed?.branch });
-				// with RUBRIC_v1 on and no Routing of your own, the composed verdict picks the output
-				const branch = rubricOn && !routed && jevOut ? BRANCH_OF[jevOut.verdict as Verdict] : routed?.branch ?? 'pass';
-				const out: INodeExecutionData = { pairedItem: { item: i }, json: { ...meta, schema_ok: schemaOk, answers: byId,
-					...(routed ? { decisions: routed.decisions as unknown as IDataObject[], allPass: routed.allPass, branch } : { branch }),
-					...(said ? { reply: said as unknown as IDataObject } : {}), ...(jevOut ? { jev: jevOut } : {}) } };
-				(branch === 'fail' ? fail : branch === 'review' ? review : pass).push(out);
+				// with RUBRIC_v1 on and no Thresholds of your own, the composed verdict sets the outcome
+				const outcome = rubricOn && !routed && jevOut ? OUTCOME_OF[jevOut.verdict as Verdict] : routed?.branch ?? 'pass';
+				out.push({ pairedItem: { item: i }, json: { ...meta, schema_ok: schemaOk, answers: byId,
+					...(routed ? { decisions: routed.decisions as unknown as IDataObject[], allPass: routed.allPass, outcome } : { outcome }),
+					...(said ? { reply: said as unknown as IDataObject } : {}), ...(jevOut ? { jev: jevOut } : {}) } });
 			} catch (error) {
-				if (this.continueOnFail()) { review.push({ json: { error: String((error as Error).message ?? 'request failed').replace(/(apikey_|tfn_live_|Bearer\s+)[A-Za-z0-9_.-]+/g, '$1[redacted]'), branch: 'review' }, pairedItem: { item: i } }); continue; }
+				if (this.continueOnFail()) { out.push({ json: { error: String((error as Error).message ?? 'request failed').replace(REDACT, '$1[redacted]'), outcome: 'review' }, pairedItem: { item: i } }); continue; }
 				if (error instanceof NodeOperationError) throw new NodeOperationError(this.getNode(), error.message, { itemIndex: i, description: error.description ?? undefined });
 				const safe = safeError(error);
 				const step = nextStep(Number(safe.httpCode));
@@ -317,6 +316,6 @@ export class TaifoonTypeSafe implements INodeType {
 				throw new NodeApiError(this.getNode(), safe, { itemIndex: i });
 			}
 		}
-		return [pass, fail, review];
+		return [out];
 	}
 }

@@ -1,15 +1,16 @@
-# Publishes to npm WITH a provenance statement, from GitHub Actions, as n8n requires for nodes
-# submitted for verification (from 2026-05-01). Triggered by publishing a GitHub release.
+# Publishes to npm WITH a provenance statement, from GitHub Actions, as n8n requires for nodes submitted for
+# verification (from 2026-05-01). Triggered by publishing a GitHub release vX.Y.Z.
+# Authentication: an npm Trusted Publisher for this repository and workflow (OIDC, no token) when one is configured
+# on npmjs.com; otherwise the NPM_TOKEN secret. Either way --provenance signs the statement through GitHub's OIDC.
 name: publish
 on:
   release:
     types: [published]
 permissions:
   contents: read
-  id-token: write          # lets npm sign the provenance statement through GitHub's OIDC
+  id-token: write          # lets npm sign the provenance statement (and authenticate a Trusted Publisher)
 jobs:
   publish:
-    # a vX.Y.Z release publishes this node
     if: startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     steps:
@@ -18,14 +19,17 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
+      - name: npm new enough for trusted publishing (11.5.1 or later)
+        run: npm install -g npm@latest && npm --version
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+      - run: npm test
       - name: Translator self-test
         run: npx --yes tsx nodes/TaifoonTypeSafe/translate.selftest.mjs
-      - name: Jev options self-test (offline, against the built node)
-        run: node nodes/TaifoonTypeSafe/jev.selftest.mjs
-      - name: The author email is a real mailbox (n8n sends its ownership token there; a noreply address receives nothing)
+      - name: n8n's scanner on the source and the tarball, before anything is published
+        run: npm run scan
+      - name: The author email is a real mailbox
         run: node -e "const e=(require('./package.json').author||{}).email||''; if(!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(e)||/noreply/i.test(e)){console.error('author.email must be a reachable mailbox, got:',e); process.exit(1)}"
       - name: The tag must match package.json
         run: test "v$(node -p "require('./package.json').version")" = "${{ github.event.release.tag_name }}"
@@ -33,10 +37,9 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           RELEASE_MODE: "true"   # n8n's prepublishOnly guard refuses a publish without it
-      # The node depends on Taifoon's other packages (owner's decision), which n8n's verification does not allow, so the
-      # scanner's result is reported here without blocking the release.
-      - name: n8n's community-package scanner (informational)
-        continue-on-error: true
+      - name: n8n's scanner on the published package (blocking)
         run: |
-          for i in 1 2 3 4 5 6 7 8 9 10; do npm view "$(node -p "require('./package.json').name")@$(node -p "require('./package.json').version")" version >/dev/null 2>&1 && break; sleep 30; done
-          npx --yes @n8n/scan-community-package "$(node -p "require('./package.json').name")"
+          N="$(node -p "require('./package.json').name")"; V="$(node -p "require('./package.json').version")"
+          for i in $(seq 1 20); do npm view "$N@$V" version >/dev/null 2>&1 && break; sleep 30; done
+          npx --yes @n8n/scan-community-package@0.39.0 "$N@$V" | tee scan.out
+          grep -q "has passed all security checks" scan.out   # the CLI exits 0 on a failed scan

@@ -68,6 +68,16 @@ async function runWorkflow(w, { answer, trigger = {}, layer = {} }) {
       for (const it of items) (resolve(c.leftValue, it.json, nodeOut) === true ? yes : no).push(it);
       nodeOut[name] = [...yes, ...no]; if (yes.length) emit(0, yes); if (no.length) emit(1, no); continue;
     }
+    if (n.type === 'n8n-nodes-base.switch') {
+      const rules = n.parameters.rules.values;
+      const buckets = rules.map(() => []);
+      for (const it of items) {
+        const hit = rules.findIndex((r) => r.conditions.conditions.every((c) => c.operator.operation === 'equals' && resolve(c.leftValue, it.json, nodeOut) === c.rightValue));
+        assert.ok(hit >= 0, `${name}: no rule matches ${JSON.stringify(it.json.outcome)}`);
+        buckets[hit].push(it);
+      }
+      nodeOut[name] = items; buckets.forEach((its, out) => its.length && emit(out, its)); continue;
+    }
     if (n.type === 'n8n-nodes-base.code') {
       const perItem = n.parameters.mode === 'runOnceForEachItem';
       const $ = (nm) => ({ first: () => nodeOut[nm][0] });
@@ -89,8 +99,8 @@ async function runWorkflow(w, { answer, trigger = {}, layer = {} }) {
         helpers: { httpRequestWithAuthentication: async (cred, req) => { calls.push({ cred, req }); return { model: 'jev-1.13.0', answers: answer(Object.keys(req.body.questions), req.body) }; } },
       };
       const outs = await node.execute.call(ctx);
-      nodeOut[name] = outs.flat();
-      outs.forEach((its, out) => its.length && emit(out, its));
+      assert.equal(outs.length, 1, 'TypeSafe has one output');
+      nodeOut[name] = outs[0]; emit(0, outs[0]);
       continue;
     }
     if (/noOp|respondToWebhook/.test(n.type)) { reached[name] = (reached[name] ?? 0) + items.length; continue; }
@@ -136,6 +146,8 @@ for (const f of readdirSync(DIR).filter((x) => x.endsWith('.workflow.json'))) {
     }
     assert.doesNotMatch(text, /tfr_[A-Za-z0-9]{8}|apikey_[A-Za-z0-9]{8}|sk-ant-|typesafe\.taifoon\.dev\/v1\/trial/, 'no keys, no trial relay');
     for (const [from, c] of Object.entries(w.connections)) for (const outs of c.main) for (const t of outs) assert.ok(w.nodes.some((n) => n.name === t.node), `${from} → ${t.node} exists`);
+    // n8n verifies no flow-control nodes: TypeSafe labels, the template branches with n8n's own Switch / IF
+    for (const n of w.nodes) if (n.type.includes('taifoonTypeSafe')) assert.ok((w.connections[n.name]?.main ?? []).length <= 1, `${n.name} wires only its one output`);
   });
 }
 for (const [f, cases] of Object.entries(CASES)) {
@@ -159,6 +171,25 @@ test('judge-bulk-submissions: an empty submission is rejected by code without as
   const { reached, calls } = await runWorkflow(load('judge-bulk-submissions.workflow.json'), { answer: rubric('complete') });
   assert.equal(calls.length, 1, 'only the non-empty submission was asked');
   assert.deepEqual([reached['Complete'], reached['Reject']], [1, 1]);
+});
+
+test('the node has one output and no output names (it labels, it does not route)', () => {
+  const d = new TaifoonTypeSafe().description;
+  assert.deepEqual(d.outputs, ['main']); assert.equal(d.outputNames, undefined);
+});
+test('thresholds label the item: outcome pass / fail / review on the one output', async () => {
+  const w = { nodes: [{ name: 'Start', type: 'n8n-nodes-base.manualTrigger', parameters: {}, position: [0, 0] },
+    { name: 'TypeSafe', type: '@taifoon/n8n-nodes-typesafe.taifoonTypeSafe', position: [200, 0], parameters: { operation: 'ask', connection: 'direct', model: 'jev-1.13.0', state: '{"t":1}', questions: {}, failClosed: true, replyLanguage: 'off',
+      questionsJson: JSON.stringify([{ id: 'ok', kind: 'noul', text: 'Is it fine?' }, { id: 'team', kind: 'choice', text: 'Which team?', options: 'a, b' }]),
+      routing: JSON.stringify({ ok: { gte: 0.8 }, team: { minConfidence: 0.6 } }) } }],
+    connections: { Start: { main: [[{ node: 'TypeSafe', type: 'main', index: 0 }]] } } };
+  const answer = (p, conf) => () => ({ ok: noul(p), team: choice('a', { a: conf, b: 1 - conf }) });
+  for (const [p, conf, outcome] of [[0.95, 0.9, 'pass'], [0.95, 0.55, 'review'], [0.1, 0.9, 'fail']]) {
+    const { nodeOut } = await runWorkflow(w, { answer: answer(p, conf) });
+    assert.equal(nodeOut.TypeSafe.length, 1); assert.equal(nodeOut.TypeSafe[0].json.outcome, outcome, `p=${p} conf=${conf}`);
+    assert.equal(nodeOut.TypeSafe[0].json.answers.ok.p, p, 'the probability is on the item');
+    assert.deepEqual(nodeOut.TypeSafe[0].json.answers.team.probabilities, { a: conf, b: 1 - conf });
+  }
 });
 
 const BASE_GET = (url) => url.includes('/judge/decisions/') ? { ok: true, decision: { ...DECISION, anchor_base: BASE_OK('0x209490d6A0FFC5368A42b0c2208BDCda853f6a92', '0x' + 'b1'.repeat(32)) } }

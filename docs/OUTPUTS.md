@@ -45,11 +45,10 @@ API's answer *exactly as TypeSafe sent it*, with none of its interpretation:
     } } }
 ```
 
-- **No Routing, no Reply, no reshaping.** `raw` is the whole `{answers, model, usage}` object the model
+- **No Thresholds, no Reply, no reshaping.** `raw` is the whole `{answers, model, usage}` object the model
   returned. The probabilities, confidences and `noul`/`score`/`choice` values are the model's own. This
   is the `--raw` form for when you want the raw calibration to feed your own logic, a training set, or a
   model that learns from Jev's best cases.
-- **Everything flows on the first output.** The fail/review outputs are a Routing feature, and Routing
-  is skipped in raw mode, so nothing is split off.
+- **No `outcome` field.** Thresholds are skipped in raw mode, so the item carries only what the model said.
 - `Fail Closed` still applies before the raw
   object is emitted, so a malformed answer still stops the item unless you turn it off.

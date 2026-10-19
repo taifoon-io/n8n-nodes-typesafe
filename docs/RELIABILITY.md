@@ -1,18 +1,18 @@
-# Routing, reliability, cost
+# Thresholds, reliability, cost
 
-## Routing: the one rule
+## Thresholds: the one rule
 
-An item leaves by **Pass** only if *every* question you put in Routing passed. So only route the
-questions you actually want to gate on. If you route `urgency` as well, a perfectly good refund ticket
+`outcome` is `pass` only if *every* question you put in Thresholds passed. So only threshold the
+questions you actually want to gate on. If you add `urgency` as well, a perfectly good refund ticket
 "fails" just because it is not urgent. We made exactly that mistake while building this.
 
-| Question | Routing keys | What happens |
+| Question | Threshold keys | What happens |
 |---|---|---|
 | Yes / no | `gte`, `lte` on `p` | pass or fail |
-| Pick one | `minConfidence`, and `in` for the options you accept | below the confidence → **Review** |
-| Rate it | `min`, `max` on the level, and optionally `minConfidence` | pass or fail; below the confidence → **Review** |
+| Pick one | `minConfidence`, and `in` for the options you accept | below the confidence → `review` |
+| Rate it | `min`, `max` on the level, and optionally `minConfidence` | pass or fail; below the confidence → `review` |
 
-A mistake in Routing never reads as a pass. A rule that names a question you did not ask (a typo, a renamed ID), a
+A mistake in Thresholds never reads as a pass. A rule that names a question you did not ask (a typo, a renamed ID), a
 yes/no rule with no threshold, or a confidence bar on an answer that carries no confidence all send the item to
 **Review**, with the reason in `decisions`.
 

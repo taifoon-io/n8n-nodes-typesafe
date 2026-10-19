@@ -1,7 +1,8 @@
 // Builds the judge workflow templates in this folder: one definition per template, one shape for all of them.
-//   trigger → the item (sample data, so it runs as imported) → TypeSafe (your own key) → Pass / Fail / Review
+//   trigger → the item (sample data, so it runs as imported) → TypeSafe (your own key) → Switch on outcome → Pass / Fail / Review
 // Run: node examples/build-judges.mjs   (writes examples/judge-*.workflow.json; test/templates.test.mjs checks them)
 import { writeFileSync } from 'node:fs';
+import { outcomeSwitch } from './outcome-switch.mjs';
 
 const TS = '@taifoon/n8n-nodes-typesafe.taifoonTypeSafe';
 const CRED = { taifoonTypeSafeApi: { id: '', name: 'TypeSafe API (your key from console.typesafe.ai)' } };
@@ -251,5 +252,5 @@ return [{ pairedItem: { item: 0 }, json: { post, rules: '1. No spam or ads outsi
   note('How it works', '## Moderate with your rules, not a black box\n\nEach rule is one yes/no question with a probability. A post that clearly breaks a rule is removed with the rule named; a clean one publishes; anything unsure goes to a moderator.\n\nYour own TypeSafe key only.', at(160, 40), 460, 240),
 ], [link('New post', 'Post and rules'), link('Post and rules', 'TypeSafe'), link('TypeSafe', 'Publish', 0), link('TypeSafe', 'Remove, with the rule it broke', 1), link('TypeSafe', 'A moderator decides', 2)], [{ name: 'Community' }, { name: 'Judge' }]);
 
-for (const [file, w] of Object.entries(T)) writeFileSync(new URL(`./${file}.workflow.json`, import.meta.url), JSON.stringify(w, null, 2) + '\n');
+for (const [file, w] of Object.entries(T)) writeFileSync(new URL(`./${file}.workflow.json`, import.meta.url), JSON.stringify(outcomeSwitch(w), null, 2) + '\n');
 console.log(`wrote ${Object.keys(T).length} judge templates`);

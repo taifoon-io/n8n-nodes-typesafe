@@ -5,12 +5,12 @@ default, and without them the node behaves exactly as 1.4.0.
 
 - **Ask RUBRIC_v1** adds the four questions of the published rubric: spec_met, unsupported_claim, ending and
   cheat_shaped. Jev reads the item, then a section listing the facts your workflow established. The node composes
-  **complete / reject / needs_review** under THRESHOLDS_v1 and routes them to Pass / Fail / Review.
+  **complete / reject / needs_review** under THRESHOLDS_v1 and labels the item `outcome: pass / fail / review`.
 - **Facts (JSON)** holds the checks you already made, e.g. `{"delivered": true, "checks": {"proof_verifies": true}}`.
-  A false check rejects on Fail, and Jev is not asked.
+  A false check rejects (`outcome: fail`), and Jev is not asked.
 - **Record On** (`none`, `devnet`, `base`, `both`) adds the unsigned calls that record the receipt on JevAnswerLog
-  and JevDecisionLog. On devnet 36927 the calls carry the logs' addresses. In this version the Base calls carry
-  `to: null`.
+  and JevDecisionLog, plus a GradeStampRegistry stamp where the network has one (devnet 36927 does; Base does not
+  yet, so Base gets the two log calls).
 - **Evaluator Call**, **Job ID** and **Evaluator Address** add the one unsigned call that ends the job as its
   evaluator. The protocols are Virtuals ERC-8183, Virtuals memo-ACP, BitAgent ERC-8183, an assurance hook or the judge
   adapter. For needs_review the call is `null`.

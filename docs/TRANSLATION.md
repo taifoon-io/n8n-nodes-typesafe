@@ -58,7 +58,7 @@ What it refuses to do, deliberately:
   every question carries `explain`: the rule that produced it.
 - **It does not write your rubric.** A score without a named scale gets a generic one and says so.
 
-## Backward: answers become branches (the Routing map on Ask)
+## Backward: answers become labels (the Thresholds map on Ask)
 
 | Question kind | Threshold keys | Outcome |
 |---|---|---|
@@ -66,9 +66,9 @@ What it refuses to do, deliberately:
 | choice | `minConfidence`; `in` (accepted options) | below `minConfidence` → **review**; outside `in` → fail |
 | score | `min`, `max` on the level | pass / fail |
 
-`branch` is **review** if any decision is review, **pass** only if every routed question passed,
+`outcome` is **review** if any decision is review, **pass** only if every thresholded question passed,
 otherwise **fail**. An answer that did not validate is always **review**: nothing fails open. The
-node exposes the three as real outputs, so they are wires on the canvas.
+node has one output; a Switch node on `outcome` turns the three labels into wires on the canvas.
 
 Translate returns thresholds only as `suggestedRouting` and leaves `routing` EMPTY: the branch is the AND of every routed question, so auto-filled thresholds made a calm refund ticket "fail" for not being urgent (measured in n8n). Copy in only what you mean to gate on. A score is a zero-based level index.
 

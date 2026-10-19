@@ -1,7 +1,7 @@
 {
   "name": "@taifoon/n8n-nodes-typesafe",
-  "version": "2.0.5",
-  "description": "n8n community node for TypeSafe System One (Jev): ask Noul, Choice and Score questions about any item, branch on calibrated probabilities, and send low-confidence answers to human review.",
+  "version": "3.0.0",
+  "description": "n8n community node for TypeSafe System One (Jev): ask yes/no, pick-one and score questions about any item and get calibrated probabilities back, with an optional pass / fail / review label.",
   "keywords": [
     "n8n-community-node-package",
     "n8n",
@@ -10,14 +10,10 @@
     "jev",
     "system-one",
     "classification",
-    "routing",
     "structured-output",
     "confidence",
-    "human-in-the-loop",
-    "approval",
-    "guardrail",
-    "ai-agent",
-    "decision"
+    "probability",
+    "grading"
   ],
   "license": "MIT",
   "homepage": "https://github.com/taifoon-io/n8n-nodes-typesafe#readme",
@@ -41,7 +37,8 @@
     "lint:fix": "n8n-node lint --fix",
     "release": "n8n-node release",
     "prepublishOnly": "n8n-node prerelease",
-    "test": "node --test test/templates.test.mjs"
+    "test": "node --test test/templates.test.mjs && node nodes/TaifoonTypeSafe/jev.selftest.mjs",
+    "scan": "node scripts/scan.mjs"
   },
   "files": [
     "dist",
@@ -51,7 +48,7 @@
   ],
   "n8n": {
     "n8nNodesApiVersion": 1,
-    "strict": false,
+    "strict": true,
     "credentials": [
       "dist/credentials/TaifoonTypeSafeApi.credentials.js"
     ],
@@ -60,7 +57,7 @@
     ]
   },
   "devDependencies": {
-    "@n8n/node-cli": "^0.48.6",
+    "@n8n/node-cli": "^0.52.6",
     "eslint": "^9.39.5",
     "typescript": "5.9.2"
   },
@@ -77,9 +74,5 @@
     "n8n-workflow": {
       "optional": true
     }
-  },
-  "dependencies": {
-    "@taifoon/jev": "^0.2.13",
-    "@taifoon/jev-wilson": "^0.2.0"
   }
 }

@@ -12,18 +12,20 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - run: npm ci
-      - name: Lint with n8n's community-node ruleset (the scanner runs this same ruleset)
+      - name: Lint with n8n's community-node ruleset (strict mode, nothing turned off)
         run: npm run lint
       - run: npm run build
-      - name: Every example workflow runs end to end (TypeSafe stubbed) and routes to the right exit
+      - name: Every example workflow runs end to end (TypeSafe stubbed); the Jev options self-test
         run: npm test
       - name: Translator self-test (eleven languages, both directions)
         run: npx --yes tsx nodes/TaifoonTypeSafe/translate.selftest.mjs
-      - name: Jev options self-test (offline, against the built node)
-        run: node nodes/TaifoonTypeSafe/jev.selftest.mjs
+      - name: n8n's community-package scanner on the source and the packed tarball
+        run: npm run scan
       - name: The author email is a real mailbox (n8n sends its ownership token there; a noreply address receives nothing)
         run: node -e "const e=(require('./package.json').author||{}).email||''; if(!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(e)||/noreply/i.test(e)){console.error('author.email must be a reachable mailbox, got:',e); process.exit(1)}"
-      - name: Run-time dependencies are Taifoon's own packages only (the owner's decision; n8n verification is given up)
-        run: node -e "const d=Object.keys(require('./package.json').dependencies||{}).filter((n)=>!n.startsWith('@taifoon/')); if(d.length){console.error('third-party run-time dependencies:',d); process.exit(1)}"
+      - name: No run-time dependencies (n8n's rule for verified community nodes)
+        run: node -e "const d=Object.keys(require('./package.json').dependencies||{}); if(d.length){console.error('run-time dependencies:',d); process.exit(1)}"
+      - name: Strict mode is on
+        run: node -e "if(require('./package.json').n8n.strict!==true){console.error('n8n.strict must be true'); process.exit(1)}"
       - name: The node reads no environment and no file system
-        run: "! grep -rnE 'process\\.env|require\\([\"'\\'']fs[\"'\\'']\\)|from [\"'\\'']fs[\"'\\'']|node:fs' nodes credentials"
+        run: "! grep -rnE 'process\\.env|require\\([\"'\\'']fs[\"'\\'']\\)|from [\"'\\'']fs[\"'\\'']|node:fs|child_process' nodes credentials --include=*.ts"
