@@ -1,0 +1,27 @@
+# Mark this package deprecated on npm (the owner's decision, 2026-10-20: typed validation belongs in coord; the main package is
+# n8n-nodes-taifoon). Run by hand: Actions → deprecate → Run workflow. The package stays installable; npm shows the message.
+name: deprecate
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: the deprecation message npm shows (empty un-deprecates)
+        required: true
+        default: "Deprecated: use n8n-nodes-taifoon (the Taifoon coordination API; typed validation lives in coord) or @taifoon/n8n-nodes-system-one for System One questions on any host."
+permissions:
+  contents: read
+jobs:
+  deprecate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: npm deprecate every version
+        run: npm deprecate "@taifoon/n8n-nodes-typesafe" "$MESSAGE"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          MESSAGE: ${{ inputs.message }}
+      - name: npm shows it
+        run: for i in 1 2 3 4 5 6; do m="$(npm view @taifoon/n8n-nodes-typesafe deprecated --prefer-online)"; [ -n "$m" ] && { echo "deprecated: $m"; exit 0; }; sleep 20; done; echo "npm does not show the deprecation yet"; exit 1
